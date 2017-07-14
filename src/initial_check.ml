@@ -177,7 +177,13 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
 			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+                         Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
+              | Parse_ast.ATyp_exist (typq, typ) ->
+                 let typq', k_env, local_env = to_ast_typquant k_env typq in
+                 Typ_exist (typq', to_ast_typ k_env def_ord typ)
+                 (*
+                 typ_error l "Got existential in initial check" None None None
+                  *)
               | Parse_ast.ATyp_app(pid,typs) ->
                   let id = to_ast_id pid in 
                   let k = Envmap.apply k_env (id_to_string id) in
@@ -303,7 +309,7 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg 
     | _ -> raise (Reporting_basic.err_unreachable l "To_ast_typ_arg received Lam kind or infer kind")),
     l)
 
-let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
+and to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) : n_constraint =
   match c with 
   | Parse_ast.NC_aux(nc,l) ->
     NC_aux( (match nc with
@@ -324,7 +330,7 @@ let to_ast_nexp_constraint (k_env : kind Envmap.t) (c : Parse_ast.n_constraint) 
     ), l)               
 
 (* Transforms a typquant while building first the kind environment of declared variables, and also the kind environment in context *)
-let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant * kind Envmap.t * kind Envmap.t =
+and to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant * kind Envmap.t * kind Envmap.t =
   let opt_kind_to_ast k_env local_names local_env (Parse_ast.KOpt_aux(ki,l)) =
     let v, key, kind, ktyp =
       match ki with

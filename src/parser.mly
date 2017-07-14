@@ -129,7 +129,7 @@ let make_vector_sugar order_set is_inc typ typ1 =
 /*Terminals with no content*/
 
 %token And Alias As Assert Bitzero Bitone Bits By Case Clause Const Dec Def Default Deinfix Effect EFFECT End 
-%token Enumerate Else Exit Extern False Forall Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
+%token Enumerate Else Exit Extern False Forall Exist Foreach Overload Function_ If_ In IN Inc Let_ Member Nat NatNum Order Cast
 %token Pure Rec Register Return Scattered Sizeof Struct Switch Then True TwoStarStar Type TYPE Typedef 
 %token Undefined Union With Val
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
@@ -387,6 +387,8 @@ atomic_typ:
     { tloc (ATyp_inc) }
   | Dec
     { tloc (ATyp_dec) }
+  | Exist id_constraints Dot atomic_typ
+    { tloc (ATyp_exist (typql(TypQ_tq($2)), $4)) }
   | tid Lt app_typs Gt
     { tloc (ATyp_app($1,$3)) }
   | Register Lt app_typs Gt

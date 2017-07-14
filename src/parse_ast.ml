@@ -127,8 +127,7 @@ kind =
    K_aux of kind_aux * l
 
 
-type 
-atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
+type atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders, and effects after parsing *)
    ATyp_id of id (* identifier *)
  | ATyp_var of kid (* ticked variable *)
  | ATyp_constant of int (* constant *)
@@ -144,54 +143,47 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)
+ | ATyp_exist of typquant * atyp
 
 and atyp = 
    ATyp_aux of atyp_aux * l
 
 
-type 
-kinded_id_aux =  (* optionally kind-annotated identifier *)
+and kinded_id_aux =  (* optionally kind-annotated identifier *)
    KOpt_none of kid (* identifier *)
  | KOpt_kind of kind * kid (* kind-annotated variable *)
 
 
-type 
-n_constraint_aux =  (* constraint over kind $_$ *)
+and n_constraint_aux =  (* constraint over kind $_$ *)
    NC_fixed of atyp * atyp
  | NC_bounded_ge of atyp * atyp
  | NC_bounded_le of atyp * atyp
  | NC_nat_set_bounded of kid * (int) list
 
 
-type 
-kinded_id = 
+and kinded_id =
    KOpt_aux of kinded_id_aux * l
 
 
-type 
-n_constraint = 
+and n_constraint =
    NC_aux of n_constraint_aux * l
 
 
-type 
-quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
+and quant_item_aux =  (* Either a kinded identifier or a nexp constraint for a typquant *)
    QI_id of kinded_id (* An optionally kinded identifier *)
- | QI_const of n_constraint (* A constraint for this type *)
+ | QI_const of n_constraint (* A constraint for this and*)
 
 
-type 
-quant_item = 
+and quant_item =
    QI_aux of quant_item_aux * l
 
 
-type 
-typquant_aux =  (* type quantifiers and constraints *)
+and typquant_aux =  (* type quantifiers and constraints *)
    TypQ_tq of (quant_item) list
  | TypQ_no_forall (* sugar, omitting quantifier and constraints *)
 
 
-type 
-typquant = 
+and typquant =
    TypQ_aux of typquant_aux * l
 
 

@@ -191,24 +191,6 @@ and string_of_nexp_aux = function
   | Nexp_exp n -> "2 ^ " ^ string_of_nexp n
   | Nexp_neg n -> "- " ^ string_of_nexp n
 
-let rec string_of_typ = function
-  | Typ_aux (typ, l) -> string_of_typ_aux typ
-and string_of_typ_aux = function
-  | Typ_wild -> "_"
-  | Typ_id id -> string_of_id id
-  | Typ_var kid -> string_of_kid kid
-  | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
-  | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
-  | Typ_fn (typ_arg, typ_ret, eff) ->
-     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
-and string_of_typ_arg = function
-  | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
-and string_of_typ_arg_aux = function
-  | Typ_arg_nexp n -> string_of_nexp n
-  | Typ_arg_typ typ -> string_of_typ typ
-  | Typ_arg_order o -> string_of_order o
-  | Typ_arg_effect eff -> string_of_effect eff
-
 let string_of_n_constraint = function
   | NC_aux (NC_fixed (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
   | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
@@ -227,14 +209,34 @@ let string_of_quant_item = function
   | QI_aux (qi, _) -> string_of_quant_item_aux qi
 
 let string_of_typquant_aux = function
-  | TypQ_tq quants -> "forall " ^ string_of_list ", " string_of_quant_item quants
+  | TypQ_tq quants -> string_of_list ", " string_of_quant_item quants
   | TypQ_no_forall -> ""
 
 let string_of_typquant = function
   | TypQ_aux (quant, _) -> string_of_typquant_aux quant
 
+let rec string_of_typ = function
+  | Typ_aux (typ, l) -> string_of_typ_aux typ
+and string_of_typ_aux = function
+  | Typ_wild -> "_"
+  | Typ_id id -> string_of_id id
+  | Typ_var kid -> string_of_kid kid
+  | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
+  | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
+  | Typ_fn (typ_arg, typ_ret, eff) ->
+     string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
+  | Typ_exist (typq, typ) -> "exist " ^ string_of_typquant typq ^ ". " ^ string_of_typ typ
+and string_of_typ_arg = function
+  | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
+and string_of_typ_arg_aux = function
+  | Typ_arg_nexp n -> string_of_nexp n
+  | Typ_arg_typ typ -> string_of_typ typ
+  | Typ_arg_order o -> string_of_order o
+  | Typ_arg_effect eff -> string_of_effect eff
+
 let string_of_typschm (TypSchm_aux (TypSchm_ts (quant, typ), _)) =
-  string_of_typquant quant ^ ". " ^ string_of_typ typ
+  "forall " ^ string_of_typquant quant ^ ". " ^ string_of_typ typ
+
 let string_of_lit (L_aux (lit, _)) =
   match lit with
   | L_unit -> "()"
