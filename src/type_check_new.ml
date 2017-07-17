@@ -90,6 +90,16 @@ let range_typ nexp1 nexp2 = mk_typ (Typ_app (mk_id "range", [mk_typ_arg (Typ_arg
 let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 
+let empty_typq (TypQ_aux (typq_aux, _)) = match typq_aux with
+  | TypQ_tq [] -> true
+  | TypQ_no_forall -> true
+  | TypQ_tq (_ :: _) -> false
+
+let exist_typ typq typ =
+  if empty_typq typq
+  then typ
+  else Typ_aux (Typ_exist (typq, typ), Parse_ast.Unknown)
+
 let vector_typ n m ord typ =
   mk_typ (Typ_app (mk_id "vector",
                    [mk_typ_arg (Typ_arg_nexp n);
@@ -166,6 +176,19 @@ let string_of_index_sort = function
      "{" ^ string_of_kid kid ^ " | "
      ^ string_of_list " & " (fun (x, y) -> string_of_nexp x ^ " <= " ^ string_of_nexp y) constraints
      ^ "}"
+
+let quant_items : typquant -> quant_item list = function
+  | TypQ_aux (TypQ_tq qis, _) -> qis
+  | TypQ_aux (TypQ_no_forall, _) -> []
+
+let typquant_bindings typq =
+  let add_qi bindings (QI_aux (qi_aux, _)) =
+    match qi_aux with
+    | QI_id (KOpt_aux (KOpt_none kid, _)) -> KidSet.add kid bindings
+    | QI_id (KOpt_aux (KOpt_kind (_, kid), _)) -> KidSet.add kid bindings
+    | QI_const _ -> bindings
+  in
+  List.fold_left add_qi KidSet.empty (quant_items typq)
 
 (**************************************************************************)
 (* 1. Substitutions                                                       *)
@@ -355,6 +378,7 @@ module Env : sig
   val add_cast : id -> t -> t
   val lookup_id : id -> t -> lvar
   val fresh_kid : t -> kid
+  val freshen_existential: t -> (typquant * typ) -> (typquant * typ)
   val expand_synonyms : t -> typ -> typ
   val empty : t
 end = struct
@@ -412,6 +436,9 @@ end = struct
 
   let freshen_bind env bind =
     List.fold_left (fun bind (kid, _) -> freshen_kid env kid bind) bind (KBindings.bindings env.typ_vars)
+
+  let freshen_existential env bind =
+    List.fold_left (fun bind kid -> freshen_kid env kid bind) bind (KidSet.elements (typquant_bindings (fst bind)))
 
   let get_val_spec id env =
     try
@@ -1288,15 +1315,11 @@ let unify l env typ1 typ2 =
   in
   let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
   let bindings = unify_typ l env typ1 typ2 in
-  bindings, add_typquant !existential env
+  bindings, !existential
 
 (**************************************************************************)
 (* 4.1, Subtyping with instantiating existentials via unification         *)
 (**************************************************************************)
-
-let quant_items : typquant -> quant_item list = function
-  | TypQ_aux (TypQ_tq qis, _) -> qis
-  | TypQ_aux (TypQ_no_forall, _) -> []
 
 let is_nat_kid kid = function
   | KOpt_aux (KOpt_kind (K_aux (K_kind [BK_aux (BK_nat, _)], _), kid'), _) -> Kid.compare kid kid' = 0
@@ -1354,10 +1377,11 @@ let subtyp l env typ1 typ2 =
   let typ2 =
     match typ2 with
     | Typ_aux (Typ_exist (typq, typ_exist), _) ->
-       typ_debug "Existential on left";
-       let unifiers, env = unify l env typ_exist typ1 in
+       let (typq, typ_exist) = Env.freshen_existential env (typq, typ_exist) in
+       typ_debug ("Existential on right : " ^ string_of_bind (typq, typ_exist));
+       let unifiers, existential = unify l env typ_exist typ1 in
        typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
-       if solve_typquant env unifiers typq
+       if solve_typquant (add_typquant existential env) unifiers typq
        then subst_unifiers unifiers typ_exist
        else typ_error l "Existential found on left"
     | _ -> typ2
@@ -1791,7 +1815,8 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           begin
             try
               typ_debug ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ);
-              let unifiers, env = unify l env ret_typ typ in
+              let unifiers, existential = unify l env ret_typ typ in
+              let env = add_typquant existential env in
               typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
               let arg_typ' = subst_unifiers unifiers arg_typ in
               let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
@@ -1803,7 +1828,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
                 try List.fold_left2 bind_tuple_pat ([], env) pats (untuple arg_typ') with
                 | Invalid_argument _ -> typ_error l "Union constructor pattern arguments have incorrect length"
               in
-              annot_pat (P_app (f, List.rev tpats)) typ, env
+              annot_pat (P_app (f, List.rev tpats)) typ, add_typquant existential env
             with
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
@@ -2151,7 +2176,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | [] -> []
     | (x :: xs) -> (n, x) :: number (n + 1) xs
   in
-  let rec instantiate env quants typs ret_typ args =
+  let rec instantiate ex quants typs ret_typ args =
     match typs, args with
     | (utyps, []), (uargs, []) ->
        begin
@@ -2159,7 +2184,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          if solve_quants env quants
          then
            let iuargs = List.map2 (fun utyp (n, uarg) -> (n, crule check_exp env uarg utyp)) utyps uargs in
-           (iuargs, ret_typ)
+           (iuargs, exist_typ ex ret_typ)
          else typ_error l ("Quantifiers " ^ string_of_list ", " string_of_quant_item quants
                            ^ " not resolved during application of " ^ string_of_id f)
        end
@@ -2167,7 +2192,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
        begin
          typ_debug ("CHECK ARG: " ^ string_of_exp arg ^ " with " ^ string_of_typ typ);
          let carg = crule check_exp env arg typ in
-         let (iargs, ret_typ') = instantiate env quants (utyps, typs) ret_typ (uargs, args) in
+         let (iargs, ret_typ') = instantiate ex quants (utyps, typs) ret_typ (uargs, args) in
          ((n, carg) :: iargs, ret_typ')
        end
     | (utyps, (typ :: typs)), (uargs, ((n, arg) :: args)) ->
@@ -2176,50 +2201,52 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
          let iarg = irule infer_exp env arg in
          typ_debug ("INFER: " ^ string_of_exp arg ^ " type " ^ string_of_typ (typ_of iarg) ^ " NF " ^ string_of_tnf (normalize_typ env (typ_of iarg)));
          try
-           let iarg, (unifiers, env) = type_coercion_unify env iarg typ in
+           let iarg, (unifiers, existential) = type_coercion_unify env iarg typ in
+           typ_debug ("EXISTENTIAL: " ^ string_of_typquant existential);
            typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
            let utyps' = List.map (subst_unifiers unifiers) utyps in
            let typs' = List.map (subst_unifiers unifiers) typs in
            let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
            let ret_typ' = subst_unifiers unifiers ret_typ in
-           let (iargs, ret_typ'') = instantiate env quants' (utyps', typs') ret_typ' (uargs, args) in
+           let (iargs, ret_typ'') = instantiate existential quants' (utyps', typs') ret_typ' (uargs, args) in
            ((n, iarg) :: iargs, ret_typ'')
          with
          | Unification_error (l, str) ->
             typ_debug ("Unification error: " ^ str);
-            instantiate env quants (typ :: utyps, typs) ret_typ ((n, arg) :: uargs, args)
+            instantiate ex quants (typ :: utyps, typs) ret_typ ((n, arg) :: uargs, args)
        end
     | (_, []), _ -> typ_error l ("Function " ^ string_of_id f ^ " applied to too many arguments")
     | _, (_, []) -> typ_error l ("Function " ^ string_of_id f ^ " not applied to enough arguments")
   in
   let instantiate_ret quants typs ret_typ =
     match ret_ctx_typ with
-    | None -> (quants, typs, ret_typ, env)
+    | None -> (quants, typs, ret_typ, TypQ_aux (TypQ_tq [], Parse_ast.Unknown))
     | Some rct ->
        begin
          typ_debug ("RCT is " ^ string_of_typ rct);
          typ_debug ("INSTANTIATE ENV RETURN:" ^ string_of_typ ret_typ);
-         let unifiers, env = try unify l env ret_typ rct with Unification_error (_, m) -> typ_debug ("UERROR: " ^ m); KBindings.empty, env in
+         let unifiers, existential = try unify l env ret_typ rct with Unification_error (_, m) -> typ_debug ("UERROR: " ^ m); KBindings.empty, (TypQ_aux (TypQ_tq [], Parse_ast.Unknown)) in
+         typ_debug ("EXISTENTIAL: " ^ string_of_typquant existential);
          typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
          let typs' = List.map (subst_unifiers unifiers) typs in
          let quants' = List.fold_left (fun qs (kid, uvar) -> instantiate_quants qs kid uvar) quants (KBindings.bindings unifiers) in
          let ret_typ' = subst_unifiers unifiers ret_typ in
-         (quants', typs', ret_typ', env)
+         (quants', typs', ret_typ', existential)
        end
   in
   let exp =
     match Env.expand_synonyms env f_typ with
     | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
-       let (quants, typ_args, typ_ret, env) = instantiate_ret (quant_items typq) typ_args typ_ret in
-       let (xs_instantiated, typ_ret) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
+       let (quants, typ_args, typ_ret, existential) = instantiate_ret (quant_items typq) typ_args typ_ret in
+       let (xs_instantiated, typ_ret) = instantiate existential quants ([], typ_args) typ_ret ([], number 0 xs) in
        let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-       typ_debug "FINISHED FUNCTION";
+       typ_debug ("FINISHED FUNCTION: " ^ string_of_typ typ_ret);
        annot_exp (E_app (f, xs_reordered)) typ_ret eff
     | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
-       let (quants, typ_args, typ_ret, env) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
-       let (xs_instantiated, typ_ret) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
+       let (quants, typ_args, typ_ret, existential) = instantiate_ret (quant_items typq) [typ_arg] typ_ret in
+       let (xs_instantiated, typ_ret) = instantiate existential quants ([], typ_args) typ_ret ([], number 0 xs) in
        let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
-       typ_debug "FINISHED FUNCTION";
+       typ_debug ("FINISHED FUNCTION: " ^ string_of_typ typ_ret);
        annot_exp (E_app (f, xs_reordered)) typ_ret eff
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
   in

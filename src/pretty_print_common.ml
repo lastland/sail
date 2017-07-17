@@ -178,7 +178,8 @@ let doc_typ, doc_atomic_typ, doc_nexp =
   | Typ_app _ | Typ_tup _ | Typ_fn _ ->
       (* exhaustiveness matters here to avoid infinite loops
        * if we add a new Typ constructor *)
-      group (parens (typ ty))
+     group (parens (typ ty))
+  | Typ_exist (typq, typ) -> atomic_typ typ (* FIXME *)
   and doc_typ_arg (Typ_arg_aux(t,_)) = match t with
   (* Be careful here because typ_arg is implemented as nexp in the
    * parser - in practice falling through app_typ after all the proper nexp
