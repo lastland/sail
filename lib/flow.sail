@@ -16,16 +16,6 @@ val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lt_atom = "lt"     : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = "gt"     : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val lt_range_atom = "lt"     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lteq_range_atom = "lteq" : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gt_range_atom = "gt"     : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val gteq_range_atom = "gteq" : forall 'n 'm 'o. (range('n, 'm), atom('o)) -> bool
-val lt_atom_range = "lt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val lteq_atom_range = "lteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gt_atom_range = "gt"     : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-val gteq_atom_range = "gteq" : forall 'n 'm 'o. (atom('n), range('m, 'o)) -> bool
-
-val eq_range = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm 'o 'p. (range('n, 'm), range('o, 'p)) -> bool
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 
 val lteq_int = "lteq" : (int, int) -> bool
@@ -33,7 +23,7 @@ val gteq_int = "gteq" : (int, int) -> bool
 val lt_int = "lt" : (int, int) -> bool
 val gt_int = "lt" : (int, int) -> bool
 
-overload operator == = {eq_atom, eq_range, eq_int}
+overload operator == = {eq_atom, eq_int}
 
 $ifdef TEST
 
