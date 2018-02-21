@@ -2572,8 +2572,8 @@ function Align__0 ('x, 'y) = return(y * (x / y))
 
 function Align__1 (x, 'y) = return(__GetSlice_int('N, Align(UInt(x), y), 0))
 
-val aset__Mem : forall 'size 'n, 8 * 'size >= 0 & 'n = 8 * 'size.
-  (AddressDescriptor, atom('size), AccessDescriptor, bits('n)) -> unit effect {escape, rreg}
+val aset__Mem : forall ('size : Int), 8 * 'size >= 0.
+  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg}
 
 function aset__Mem (desc, size, accdesc, value_name) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -7964,8 +7964,8 @@ function AArch64_TranslateAddress (vaddress, acctype, iswrite, wasaligned, 'size
   return(result)
 }
 
-val AArch64_aset_MemSingle : forall 'size 'n, 64 >= 0 & 8 * 'size >= 0 & 'n = 8 * 'size.
-  (bits(64), atom('size), AccType, bool, bits('n)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val AArch64_aset_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
+  (bits(64), atom('size), AccType, bool, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name) = {
   assert('size == 1 | 'size == 2 | 'size == 4 | 'size == 8 | 'size == 16, "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -7980,8 +7980,8 @@ function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name)
   ()
 }
 
-val aset_Mem : forall 'size 'n, 64 >= 0 & 8 * 'size >= 0 & 'n = 8 * 'size.
-  (bits(64), atom('size), AccType, bits('n)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aset_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
+  (bits(64), atom('size), AccType, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function aset_Mem (address, size, acctype, value_name__arg) = {
   value_name = value_name__arg;

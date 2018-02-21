@@ -76,7 +76,7 @@ let mk_pat pat_aux = P_aux (pat_aux, no_annot)
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
-
+                                       
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
@@ -320,11 +320,6 @@ let mk_effect effs =
   Effect_aux (Effect_set (List.map (fun be_aux -> BE_aux (be_aux, Parse_ast.Unknown)) effs), Parse_ast.Unknown)
 
 let no_effect = mk_effect []
-
-let add_quants qis (TypQ_aux (typq_aux, l) as typq) =
-  match typq_aux with
-  | TypQ_tq qis' -> TypQ_aux (TypQ_tq (qis' @ qis), l)
-  | TypQ_no_forall -> TypQ_aux (TypQ_tq qis, l)
 
 let quant_items : typquant -> quant_item list = function
   | TypQ_aux (TypQ_tq qis, _) -> qis

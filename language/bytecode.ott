@@ -84,8 +84,7 @@ ctyp :: 'CT_' ::=
 % this point, as C doesn't have variants or tuples natively, but these
 % need to be encoded.
   | vector ( bool , ctyp )         :: :: vector
-  | list ( ctyp )                  :: :: list
-% A vector type for non-bit vectors, and a list type.
+% A vector type for non-bit vectors
 
 cval :: 'CV_' ::=
   {{ ocaml fragment * ctyp }}

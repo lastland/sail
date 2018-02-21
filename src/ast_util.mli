@@ -160,8 +160,6 @@ val nc_int_set : kid -> int list -> n_constraint
    de-morgans to switch and to or and vice versa. *)
 val nc_negate : n_constraint -> n_constraint
 
-val add_quants : quant_item list -> typquant -> typquant
-
 val quant_items : typquant -> quant_item list
 val quant_kopts : typquant -> kinded_id list
 val quant_split : typquant -> kinded_id list * n_constraint list

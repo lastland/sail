@@ -152,49 +152,6 @@ let to_ast_base_kind (Parse_ast.BK_aux(k,l')) =
   | Parse_ast.BK_nat -> BK_aux(BK_nat,l'), { k = K_Nat }
   | Parse_ast.BK_order -> BK_aux(BK_order,l'), { k = K_Ord }
 
-(** Map over all nexps in a type - excluding those in existential constraints **)
-let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
-  match typ_aux with
-  | Typ_id _ | Typ_var _ -> typ
-  | Typ_fn (arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
-  | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
-  | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, map_nexps f typ), l)
-  | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map (map_nexps_arg f) args), l)
-and map_nexps_arg f (Typ_arg_aux (arg_aux, l) as arg) =
-  match arg_aux with
-  | Typ_arg_order _ | Typ_arg_typ _ -> arg
-  | Typ_arg_nexp n -> Typ_arg_aux (Typ_arg_nexp (f n), l)
-
-let canonical typ =
-  let counter = ref 0 in
-  let complex_nexps = ref KBindings.empty in
-  let simplify_nexp (Nexp_aux (nexp_aux, l) as nexp) =
-    match nexp_aux with
-    | Nexp_var _ | Nexp_constant _ -> nexp
-    | _ ->
-       let kid = Kid_aux (Var ("'c#" ^ string_of_int !counter), l) in
-       complex_nexps := KBindings.add kid nexp !complex_nexps;
-       incr counter;
-       Nexp_aux (Nexp_var kid, l)
-  in
-  let typ = map_nexps simplify_nexp typ in
-  let existentials = KBindings.bindings !complex_nexps |> List.map fst in
-  let constr nc = List.fold_left (fun nc (kid, nexp) -> nc_and nc (nc_eq (nvar kid) nexp)) nc (KBindings.bindings !complex_nexps) in
-  existentials, constr, typ
-
-let canonicalize typ =
-  let existentials, constr, (Typ_aux (typ_aux, l) as typ) = canonical typ in
-  if existentials = [] then
-    typ
-  else
-    let typ_aux = match typ_aux with
-      | Typ_tup _ | Typ_app _ -> Typ_exist (existentials, constr nc_true, typ)
-      | Typ_exist (kids, nc, typ) -> Typ_exist (kids @ existentials, constr nc, typ)
-      | Typ_fn _ -> typ_error l "\nCannot canonicalize function type" None None None
-      | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
-    in
-    Typ_aux (typ_aux, l)
-
 let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),l)) : (Ast.kind * kind) =
   match klst with
   | [] -> raise (Reporting_basic.err_unreachable l "Kind with empty kindlist encountered")
@@ -207,8 +164,8 @@ let to_ast_kind (k_env : kind Envmap.t) (Parse_ast.K_aux(Parse_ast.K_kind(klst),
           | K_Typ -> K_aux(K_kind(List.map fst k_pairs), l), { k = K_Lam(args,ret) }
           | _ -> typ_error l "Type constructor must have an -> kind ending in Type" None None None
 
-let rec to_ast_typ' (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
-(*  let _ = Printf.eprintf "to_ast_typ'\n" in*)
+let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp) : Ast.typ =
+(*  let _ = Printf.eprintf "to_ast_typ\n" in*)
   match t with
   | Parse_ast.ATyp_aux(t,l) ->
     Typ_aux( (match t with
@@ -222,10 +179,10 @@ let rec to_ast_typ' (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp
                               | K_infer -> k.k <- K_Typ; Typ_var v
                               | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
                 | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-              | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ' k_env def_ord arg),
-                                                           (to_ast_typ' k_env def_ord ret),
+              | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
+                                                           (to_ast_typ k_env def_ord ret),
                                                            (to_ast_effects k_env efct))
-              | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ' k_env def_ord) typs)
+              | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
 	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
 		let make_r bot top =
 		  match bot,top with
@@ -247,7 +204,7 @@ let rec to_ast_typ' (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp
 			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ' k_env def_ord ti), Parse_ast.Unknown);])
+			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
 	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_r",il), [b;r;ord;ti]) ->
 		let make_sub_one t =
 		  match t with
@@ -263,7 +220,7 @@ let rec to_ast_typ' (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp
 			[Typ_arg_aux (Typ_arg_nexp base,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_nexp rise,Parse_ast.Unknown);
 			 Typ_arg_aux (Typ_arg_order def_ord,Parse_ast.Unknown);
-			 Typ_arg_aux (Typ_arg_typ (to_ast_typ' k_env def_ord ti), Parse_ast.Unknown);])
+			 Typ_arg_aux (Typ_arg_typ (to_ast_typ k_env def_ord ti), Parse_ast.Unknown);])
               | Parse_ast.ATyp_app(pid,typs) ->
                   let id = to_ast_id pid in
                   let k = Envmap.apply k_env (id_to_string id) in
@@ -271,19 +228,17 @@ let rec to_ast_typ' (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp
                   | Some({k = K_Lam(args,t)}) ->
 		    if ((List.length args) = (List.length typs))
 		      then
-                      Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
+		      Typ_app(id,(List.map2 (fun k a -> (to_ast_typ_arg k_env def_ord k a)) args typs))
 		    else typ_error l "Type constructor given incorrect number of arguments" (Some id) None None
                   | None -> typ_error l "Required a type constructor, encountered an unbound identifier" (Some id) None None
                   | _ -> typ_error l "Required a type constructor, encountered a base kind variable" (Some id) None None)
               | Parse_ast.ATyp_exist (kids, nc, atyp) ->
                  let kids = List.map to_ast_var kids in
                  let k_env = List.fold_left Envmap.insert k_env (List.map (fun kid -> (var_to_string kid, {k=K_Nat})) kids) in
-                 let exist_typ = to_ast_typ' k_env def_ord atyp in
+                 let exist_typ = to_ast_typ k_env def_ord atyp in
                  Typ_exist (kids, to_ast_nexp_constraint k_env nc, exist_typ)
               | _ -> typ_error l "Required an item of kind Type, encountered an illegal form for this kind" None None None
     ), l)
-
-and to_ast_typ k_env def_ord typ = canonicalize (to_ast_typ' k_env def_ord typ)
 
 and to_ast_nexp (k_env : kind Envmap.t) (n: Parse_ast.atyp) : Ast.nexp =
   match n with
@@ -368,7 +323,7 @@ and to_ast_typ_arg (k_env : kind Envmap.t) (def_ord : order) (kind : kind) (arg 
   let l = (match arg with Parse_ast.ATyp_aux(_,l) -> l) in
   Typ_arg_aux (
     (match kind.k with
-    | K_Typ -> Typ_arg_typ (to_ast_typ' k_env def_ord arg)
+    | K_Typ -> Typ_arg_typ (to_ast_typ k_env def_ord arg)
     | K_Nat  -> Typ_arg_nexp (to_ast_nexp k_env arg)
     | K_Ord -> Typ_arg_order (to_ast_order k_env def_ord arg)
     | _ -> raise (Reporting_basic.err_unreachable l ("To_ast_typ_arg received Lam kind or infer kind: " ^ kind_to_string kind))),
@@ -455,20 +410,11 @@ let to_ast_typquant (k_env: kind Envmap.t) (tq : Parse_ast.typquant) : typquant 
 
 let to_ast_typschm (k_env:kind Envmap.t) (def_ord:order) (tschm:Parse_ast.typschm) :Ast.typschm * kind Envmap.t * kind Envmap.t =
   match tschm with
-  | Parse_ast.TypSchm_aux (Parse_ast.TypSchm_ts (typq, typ), l) ->
-     let typq, k_env, local_env = to_ast_typquant k_env typq in
-     begin match typ with
-     | Parse_ast.ATyp_aux (Parse_ast.ATyp_fn (arg_typ, ret_typ, effects), tl) ->
-        let foralls, constr, arg_typ = canonical (to_ast_typ' k_env def_ord arg_typ) in
-        if foralls = [] then
-          let typ = Typ_aux (Typ_fn (arg_typ, to_ast_typ k_env def_ord ret_typ, to_ast_effects k_env effects), tl) in
-          TypSchm_aux (TypSchm_ts (typq, typ), l), k_env, local_env
-        else
-          typ_error l "\nComplex Int-kinded type expression on left hand side of function type" None None None
-     | _ ->
-        let typ = to_ast_typ k_env def_ord typ in
-        TypSchm_aux (TypSchm_ts (typq, typ), l), k_env, local_env
-     end
+  | Parse_ast.TypSchm_aux(ts,l) ->
+    (match ts with | Parse_ast.TypSchm_ts(tquant,t) ->
+      let tq,k_env,local_env = to_ast_typquant k_env tquant in
+      let typ = to_ast_typ k_env def_ord t in
+      TypSchm_aux(TypSchm_ts(tq,typ),l),k_env,local_env)
 
 let to_ast_lit (Parse_ast.L_aux(lit,l)) : lit =
   L_aux(
@@ -493,7 +439,7 @@ let rec to_ast_typ_pat (Parse_ast.ATyp_aux (typ_aux, l)) =
   | Parse_ast.ATyp_app (f, typs) ->
      TP_aux (TP_app (to_ast_id f, List.map to_ast_typ_pat typs), l)
   | _ -> typ_error l "Unexpected type in type pattern" None None None
-
+                                     
 let rec to_ast_pat (k_env : kind Envmap.t) (def_ord : order) (Parse_ast.P_aux(pat,l) : Parse_ast.pat) : unit pat =
   P_aux(
     (match pat with
