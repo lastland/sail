@@ -3,6 +3,7 @@ default Order dec
 $include <smt.sail>
 $include <flow.sail>
 
+type range ('n : Int) ('m : Int) = {'o, 'n <= 'o <= 'm. atom('o)}
 type bits ('n : Int) = vector('n, dec, bit)
 
 val eq_bit = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", interpreter: "eq_anything"} : (bit, bit) -> bool
@@ -57,8 +58,11 @@ val vector_update_B = {ocaml: "update", lem: "update_list_dec"} : forall 'n ('a 
 
 overload vector_update = {bitvector_update_B, vector_update_B}
 
-val vector_update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.
-  (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+val vector_update_subrange = {
+  ocaml: "update_subrange",
+  lem: "update_subrange_vec_dec"
+} : forall 'n 'm 'o 'p, 'p = 'm - ('o - 1).
+  (bits('n), atom('m), atom('o), bits('p)) -> bits('n)
 
 val vcons : forall ('n : Int) ('a : Type).
   ('a, vector('n, dec, 'a)) -> vector('n + 1, dec, 'a)
@@ -164,8 +168,8 @@ val real_power = {ocaml: "real_power", lem: "realPowInteger"} : (real, int) -> r
 
 overload operator ^ = {xor_vec, int_power, real_power}
 
-val add_range = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
+val add_atom = {ocaml: "add_int", lem: "integerAdd"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n + 'm)
 
 val add_int = {ocaml: "add_int", lem: "integerAdd"} : (int, int) -> int
 
@@ -175,10 +179,10 @@ val add_vec_int = "add_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val add_real = {ocaml: "add_real", lem: "realAdd"} : (real, real) -> real
 
-overload operator + = {add_range, add_int, add_vec, add_vec_int, add_real}
+overload operator + = {add_atom, add_int, add_vec, add_vec_int, add_real}
 
-val sub_range = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
+val sub_atom = {ocaml: "sub_int", lem: "integerMinus"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n - 'm)
 
 val sub_int = {ocaml: "sub_int", lem: "integerMinus"} : (int, int) -> int
 
@@ -188,24 +192,24 @@ val "sub_vec_int" : forall 'n. (bits('n), int) -> bits('n)
 
 val sub_real = {ocaml: "sub_real", lem: "realMinus"} : (real, real) -> real
 
-val negate_range = {ocaml: "negate", lem: "integerNegate"} : forall 'n 'm. range('n, 'm) -> range(- 'm, - 'n)
+val negate_atom = {ocaml: "negate", lem: "integerNegate"} : forall 'n. atom('n) -> atom(- 'n)
 
 val negate_int = {ocaml: "negate", lem: "integerNegate"} : int -> int
 
 val negate_real = {ocaml: "negate_real", lem: "realNegate"} : real -> real
 
-overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
+overload operator - = {sub_atom, sub_int, sub_vec, sub_vec_int, sub_real}
 
-overload negate = {negate_range, negate_int, negate_real}
+overload negate = {negate_atom, negate_int, negate_real}
 
-val mult_range = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm 'o 'p.
-  (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
+val mult_atom = {ocaml: "mult", lem: "integerMult"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n * 'm)
 
 val mult_int = {ocaml: "mult", lem: "integerMult"} : (int, int) -> int
 
 val mult_real = {ocaml: "mult_real", lem: "realMult"} : (real, real) -> real
 
-overload operator * = {mult_range, mult_int, mult_real}
+overload operator * = {mult_atom, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
@@ -235,7 +239,7 @@ val abs_real = "abs_real" : real -> real
 
 overload abs = {abs_atom, abs_int, abs_real}
 
-val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (nat, nat) -> nat
+val quotient_nat = {ocaml: "quotient", lem: "integerDiv"} : (int, int) -> int
 
 val quotient_real = {ocaml: "quotient_real", lem: "realDiv"} : (real, real) -> real
 
@@ -253,23 +257,19 @@ val shl_int = "shl_int" : (int, int) -> int
 
 val shr_int = "shr_int" : (int, int) -> int
 
-val min_nat = {ocaml: "min_int", lem: "min"} : (nat, nat) -> nat
-
 val min_int = {ocaml: "min_int", lem: "min"} : (int, int) -> int
-
-val max_nat = {ocaml: "max_int", lem: "max"} : (nat, nat) -> nat
 
 val max_int = {ocaml: "max_int", lem: "max"} : (int, int) -> int
 
-overload min = {min_nat, min_int}
+overload min = {min_int}
 
-overload max = {max_nat, max_int}
+overload max = {max_int}
 
-val __WriteRAM = "write_ram" : forall 'n 'm.
-  (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmem}
+val __WriteRAM = "write_ram" : forall 'n 'm 'o, 'o = 8 * 'n.
+  (atom('m), atom('n), bits('m), bits('m), bits('o)) -> unit effect {wmem}
 
-val __TraceMemoryWrite : forall 'n 'm.
-  (atom('n), bits('m), bits(8 * 'n)) -> unit
+val __TraceMemoryWrite : forall 'n 'm 'o, 'o = 8 * 'n.
+  (atom('n), bits('m), bits('o)) -> unit
 
 val __InitRAM : forall 'm. (atom('m), int, bits('m), bits(8)) -> unit
 
@@ -278,27 +278,14 @@ function __InitRAM _ = ()
 val __ReadRAM = "read_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
-val __TraceMemoryRead : forall 'n 'm. (atom('n), bits('m), bits(8 * 'n)) -> unit
+val __TraceMemoryRead : forall 'n 'm 'o, 'o = 8 * 'n.
+  (atom('n), bits('m), bits('o)) -> unit
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
-
-val cast ex_nat : nat -> {'n, 'n >= 0. atom('n)}
-
-function ex_nat 'n = n
 
 val cast ex_int : int -> {'n, true. atom('n)}
 
 function ex_int 'n = n
-
-val ex_range : forall 'n 'm.
-  range('n, 'm) -> {'o, 'n <= 'o & 'o <= 'm. atom('o)}
-
-val coerce_int_nat : int -> nat effect {escape}
-
-function coerce_int_nat 'x = {
-  assert(constraint('x >= 0));
-  x
-}
 
 val slice = "slice" : forall ('n : Int) ('m : Int), 'm >= 0 & 'n >= 0.
   (bits('m), int, atom('n)) -> bits('n)

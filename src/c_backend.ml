@@ -632,7 +632,7 @@ let rec ctyp_of_typ ctx typ =
   | Typ_id id when string_of_id id = "nat" -> CT_mpz
   | Typ_app (id, _) when string_of_id id = "range" || string_of_id id = "atom" ->
      begin
-       match destruct_range typ with
+       match None (* FIXME!!!! *) with
        | None -> assert false (* Checked if range type in guard *)
        | Some (n, m) ->
           match nexp_simp n, nexp_simp m with
@@ -757,7 +757,7 @@ let analyze_primop' ctx id args typ =
   (* primops add_range and add_atom *)
   if string_of_id id = "add_range" || string_of_id id = "add_atom" then
     begin
-      let n, m, x, y = match destruct_range typ, args with
+      let n, m, x, y = match None (* FIXME *), args with
         | Some (n, m), [x; y] -> n, m, x, y
         | _ -> failwith ("add_range has incorrect return type or arity ^ " ^ string_of_typ typ)
       in

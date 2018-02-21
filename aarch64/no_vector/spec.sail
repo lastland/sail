@@ -2611,8 +2611,8 @@ function Align__0 ('x, 'y) = return(y * (x / y))
 
 function Align__1 (x, 'y) = return(__GetSlice_int('N, Align(UInt(x), y), 0))
 
-val aset__Mem : forall ('size : Int), 8 * 'size >= 0.
-  (AddressDescriptor, atom('size), AccessDescriptor, bits(8 * 'size)) -> unit effect {escape, rreg, wmem}
+val aset__Mem : forall 'size 'n, 'n >= 0 & 'n = 8 * 'size.
+  (AddressDescriptor, atom('size), AccessDescriptor, bits('n)) -> unit effect {escape, rreg, wmem}
 
 function aset__Mem (desc, size, accdesc, value_name) = {
   assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -2984,10 +2984,10 @@ function ExtendReg (reg, typ, shift) = {
     }
   };
   len = min(len, 'N - shift);
-  shift2 = coerce_int_nat(shift);
+  let 'shift2 = shift;
   let 'len2 : {'n, true. atom('n)} = ex_int(len);
-  assert(constraint('len2 >= 2), "hack");
-  return(Extend(append(val_name[len2 - 1 .. 0], Zeros(ex_nat(shift2))), 'N, unsigned))
+  assert(constraint('len2 >= 2 & 'shift2 >= 0), "hack");
+  return(Extend(append(val_name[len2 - 1 .. 0], Zeros(shift2)), 'N, unsigned))
 }
 
 val aget_ELR__0 : bits(2) -> bits(64) effect {escape, rreg, undef}
@@ -4747,10 +4747,11 @@ function LongConvertAttrsHints (attrfield, acctype) = {
 
 val AArch64_S1AttrDecode : (bits(2), bits(3), AccType) -> MemoryAttributes effect {rreg, undef, escape}
 
-function AArch64_S1AttrDecode (SH, attr, acctype) = let 'uattr = ex_nat(UInt(attr)) in {
+function AArch64_S1AttrDecode (SH, attr, acctype) = let 'uattr = UInt(attr) in {
+  assert(constraint('uattr >= 0));
   memattrs : MemoryAttributes = undefined;
   mair : bits(64) = aget_MAIR();
-  index : atom(8 * 'uattr) = 8 * uattr;
+  let index as atom('uattr_x) = 8 * uattr;
   attrfield : bits(8) = mair[7 + index .. index];
   __anon1 : Constraint = undefined;
   if ((attrfield[7 .. 4] != 0x0) & (attrfield[3 .. 0] == 0x0)) | ((attrfield[7 .. 4] == 0x0) & ((attrfield[3 .. 0] & 0x3) != 0x0)) then
@@ -6007,7 +6008,7 @@ val AArch64_MaybeZeroRegisterUppers : unit -> unit effect {wreg, undef, rreg, es
 function AArch64_MaybeZeroRegisterUppers () = {
   assert(UsingAArch32(), "UsingAArch32()");
   include_R15_name : bool = undefined;
-  last : range(14, 30) = undefined;
+  last : range(14, 30) = 14;
   first : atom(0) = 0;
   if (PSTATE.EL == EL0) & ~(ELUsingAArch32(EL1)) then {
     first = 0;
@@ -6520,7 +6521,8 @@ val AArch64_BranchAddr : bits(64) -> bits(64) effect {rreg, undef, escape}
 
 function AArch64_BranchAddr vaddress = {
   assert(~(UsingAArch32()), "!(UsingAArch32())");
-  msbit : nat = coerce_int_nat(AddrTop(vaddress, true, PSTATE.EL));
+  let msbit as atom(_) = AddrTop(vaddress, true, PSTATE.EL);
+  assert(msbit >= 0);
   if msbit == 63 then return(vaddress) else if (((PSTATE.EL == EL0) | (PSTATE.EL == EL1)) | IsInHost()) & ([vaddress[msbit]] == 0b1) then return(SignExtend(slice(vaddress, 0, msbit + 1))) else return(ZeroExtend(slice(vaddress, 0, msbit + 1)))
 }
 
@@ -8076,8 +8078,8 @@ function AArch64_TranslateAddress (vaddress, acctype, iswrite, wasaligned, 'size
   return(result)
 }
 
-val AArch64_aset_MemSingle : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType, bool, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val AArch64_aset_MemSingle : forall 'size 'n, 'n = 8 * 'size & 'n >= 0.
+  (bits(64), atom('size), AccType, bool, bits('n)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name) = {
   assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
@@ -8092,8 +8094,8 @@ function AArch64_aset_MemSingle (address, size, acctype, wasaligned, value_name)
   ()
 }
 
-val aset_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
-  (bits(64), atom('size), AccType, bits(8 * 'size)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
+val aset_Mem : forall 'size 'n, 'n = 8 * 'size & 'n >= 0.
+  (bits(64), atom('size), AccType, bits('n)) -> unit effect {escape, rmem, rreg, undef, wmem, wreg}
 
 function aset_Mem (address, size, acctype, value_name__arg) = {
   value_name = value_name__arg;
@@ -8128,7 +8130,8 @@ function AArch64_aget_MemSingle (address, size, acctype, wasaligned) = {
   assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
   assert(address == Align(address, 'size), "(address == Align(address, size))");
   memaddrdesc : AddressDescriptor = undefined;
-  value_name : bits(8 * 'size) = undefined;
+  let _ as atom('size8) = size * 8 in
+  value_name : bits('size8) = undefined;
   iswrite : bool = false;
   memaddrdesc = AArch64_TranslateAddress(address, acctype, iswrite, wasaligned, 'size);
   if IsFault(memaddrdesc) then AArch64_Abort(address, memaddrdesc.fault) else ();
@@ -8142,7 +8145,9 @@ val aget_Mem : forall ('size : Int), 64 >= 0 & 8 * 'size >= 0.
 
 function aget_Mem (address, size, acctype) = {
   assert(('size == 1) | (('size == 2) | (('size == 4) | (('size == 8) | ('size == 16)))), "((size == 1) || ((size == 2) || ((size == 4) || ((size == 8) || (size == 16)))))");
-  value_name : bits(8 * 'size) = undefined;
+  let _ as atom('size8) = size * 8;
+  assert(constraint('size8 = 'size * 8));
+  value_name : bits('size8) = undefined;
   i : int = undefined;
   iswrite : bool = false;
   aligned : bool = AArch64_CheckAlignment(address, 'size, acctype, iswrite);
@@ -8428,7 +8433,8 @@ val aarch64_memory_literal_simdfp : forall ('size : Int).
 function aarch64_memory_literal_simdfp (offset, size, t) = {
   assert(constraint('size >= 0));
   address : bits(64) = aget_PC() + offset;
-  data : bits(8 * 'size) = undefined;
+  let _ as atom('size8) = size * 8;
+  data : bits('size8) = undefined;
   CheckFPAdvSIMDEnabled64();
   data = aget_Mem(address, size, AccType_VEC);
   aset_V(t, data)
@@ -8440,7 +8446,8 @@ val aarch64_memory_literal_general : forall ('size : Int).
 function aarch64_memory_literal_general (memop, offset, signed, size, t) = {
   assert(constraint('size >= 0));
   address : bits(64) = aget_PC() + offset;
-  data : bits(8 * 'size) = undefined;
+  let _ as atom('size8) = 'size * 8;
+  data : bits('size8) = undefined;
   match memop {
     MemOp_LOAD => {
       data = aget_Mem(address, size, AccType_NORMAL);
@@ -8486,7 +8493,7 @@ function aarch64_memory_atomicops_swp (datasize, ldacctype, n, regsize, s, stacc
     address = aget_SP()
   } else address = aget_X(n);
   data = aget_Mem(address, dbytes, ldacctype);
-  aset_Mem(address, dbytes, stacctype, aget_X(s));
+  aset_Mem(address, dbytes, stacctype, aget_X(s) : bits('datasize));
   aset_X(t, ZeroExtend(data, regsize))
 }
 
@@ -8583,9 +8590,10 @@ function aarch64_memory_atomicops_cas_pair (datasize, ldacctype, n, regsize, s, 
   assert(constraint('datasize in {8, 16, 32, 64, 128}), "datasize constraint");
   assert(constraint(4 * 'dbytes = 'datasize), "dbytes constraint");
   address : bits(64) = undefined;
-  comparevalue : bits(2 * 'datasize) = undefined;
-  newvalue : bits(2 * 'datasize) = undefined;
-  data : bits(2 * 'datasize) = undefined;
+  let _ as atom('datasize2) = 2 * 'datasize;
+  comparevalue : bits('datasize2) = undefined;
+  newvalue : bits('datasize2) = undefined;
+  data : bits('datasize2) = undefined;
   s1 : bits('datasize) = aget_X(s);
   s2 : bits('datasize) = aget_X(s + 1);
   t1 : bits('datasize) = aget_X(t);

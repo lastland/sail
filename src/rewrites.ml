@@ -2671,7 +2671,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
           function and passed to foreach*. *)
        let vars, varpats = mk_var_exps_pats pl env (find_updated_vars exp4) in
        let exp4 = rewrite_var_updates (add_vars overwrite exp4 vars) in
-       let ord_exp, lower, upper = match destruct_range (typ_of exp1), destruct_range (typ_of exp2) with
+       let ord_exp, lower, upper = match None, None (* destruct_range (typ_of exp1), destruct_range (typ_of exp2) *) with
          | None, _ | _, None ->
             raise (Reporting_basic.err_unreachable el "Could not determine loop bounds")
          | Some (l1, u1), Some (l2, u2) ->

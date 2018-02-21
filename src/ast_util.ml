@@ -556,11 +556,11 @@ and string_of_typ_aux = function
   | Typ_id id -> string_of_id id
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
-  | Typ_app (id, args) -> string_of_id id ^ "<" ^ string_of_list ", " string_of_typ_arg args ^ ">"
+  | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
   | Typ_fn (typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
   | Typ_exist (kids, nc, typ) ->
-     "exist " ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ
+     "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
 and string_of_typ_arg = function
   | Typ_arg_aux (typ_arg, l) -> string_of_typ_arg_aux typ_arg
 and string_of_typ_arg_aux = function
@@ -615,7 +615,7 @@ let string_of_lit (L_aux (lit, _)) =
   | L_bin n -> "0b" ^ n
   | L_undef -> "undefined"
   | L_real r -> r
-  | L_string str -> "\"" ^ str ^ "\""
+  | L_string str -> "\"" ^ String.escaped str ^ "\""
 
 let rec string_of_exp (E_aux (exp, _)) =
   match exp with
@@ -630,9 +630,9 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_app_infix (x, op, y) -> "(" ^ string_of_exp x ^ " " ^ string_of_id op ^ " " ^ string_of_exp y ^ ")"
   | E_tuple exps -> "(" ^ string_of_list ", " string_of_exp exps ^ ")"
   | E_case (exp, cases) ->
-     "switch " ^ string_of_exp exp ^ " { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+     "match " ^ string_of_exp exp ^ " { " ^ string_of_list ", " string_of_pexp cases ^ "}"
   | E_try (exp, cases) ->
-     "try " ^ string_of_exp exp ^ " catch { case " ^ string_of_list " case " string_of_pexp cases ^ "}"
+     "try " ^ string_of_exp exp ^ " catch { " ^ string_of_list ", " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
   | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
   | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
@@ -641,7 +641,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_vector_update (v, n, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_update_subrange (v, n, m, exp) -> "[" ^ string_of_exp v ^ " with " ^ string_of_exp n ^ " .. " ^ string_of_exp m ^ " = " ^ string_of_exp exp ^ "]"
   | E_vector_subrange (v, n1, n2) -> string_of_exp v ^ "[" ^ string_of_exp n1 ^ " .. " ^ string_of_exp n2 ^ "]"
-  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " : " ^ string_of_exp v2
+  | E_vector_append (v1, v2) -> string_of_exp v1 ^ " @ " ^ string_of_exp v2
   | E_if (cond, then_branch, else_branch) ->
      "if " ^ string_of_exp cond ^ " then " ^ string_of_exp then_branch ^ " else " ^ string_of_exp else_branch
   | E_field (exp, id) -> string_of_exp exp ^ "." ^ string_of_id id
@@ -657,7 +657,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_exit exp -> "exit " ^ string_of_exp exp
   | E_throw exp -> "throw " ^ string_of_exp exp
   | E_cons (x, xs) -> string_of_exp x ^ " :: " ^ string_of_exp xs
-  | E_list xs -> "[||" ^ string_of_list ", " string_of_exp xs ^ "||]"
+  | E_list xs -> "[|" ^ string_of_list ", " string_of_exp xs ^ "|]"
   | E_record_update (exp, FES_aux (FES_Fexps (fexps, _), _)) ->
      "{ " ^ string_of_exp exp ^ " with " ^ string_of_list "; " string_of_fexp fexps ^ " }"
   | E_record (FES_aux (FES_Fexps (fexps, _), _)) ->
@@ -806,14 +806,6 @@ let rec lexp_to_exp (LEXP_aux (lexp_aux, annot) as le) =
   | LEXP_field (lexp, id) -> rewrap (E_field (lexp_to_exp lexp, id))
   | LEXP_memory (id, exps) -> rewrap (E_app (id, exps))
   | LEXP_deref exp -> rewrap (E_app (mk_id "reg_deref", [exp]))
-
-let destruct_range (Typ_aux (typ_aux, _)) =
-  match typ_aux with
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n, _)])
-       when string_of_id f = "atom" -> Some (n, n)
-  | Typ_app (f, [Typ_arg_aux (Typ_arg_nexp n1, _); Typ_arg_aux (Typ_arg_nexp n2, _)])
-       when string_of_id f = "range" -> Some (n1, n2)
-  | _ -> None
 
 let rec is_number (Typ_aux (t,_)) =
   match t with
