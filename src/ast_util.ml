@@ -76,8 +76,10 @@ let mk_pat pat_aux = P_aux (pat_aux, no_annot)
 let unaux_pat (P_aux (pat_aux, _)) = pat_aux
 
 let mk_pexp pexp_aux = Pat_aux (pexp_aux, no_annot)
-                                       
+
 let mk_lexp lexp_aux = LEXP_aux (lexp_aux, no_annot)
+
+let mk_typ_pat tpat_aux = TP_aux (tpat_aux, Parse_ast.Unknown)
 
 let mk_lit lit_aux = L_aux (lit_aux, Parse_ast.Unknown)
 
@@ -180,6 +182,7 @@ module IdSet = Set.Make(Id)
 module KBindings = Map.Make(Kid)
 module KidSet = Set.Make(Kid)
 module NexpSet = Set.Make(Nexp)
+module NexpMap = Map.Make(Nexp)
 
 let rec nexp_identical nexp1 nexp2 = (Nexp.compare nexp1 nexp2 = 0)
 
@@ -232,6 +235,14 @@ and nexp_simp_aux = function
        | Nexp_minus (Nexp_aux (n,_), Nexp_aux (Nexp_constant c1,_)), Nexp_constant c2
          when Big_int.equal c1 (Big_int.negate c2) -> n
        | _, _ -> Nexp_minus (n1, n2)
+     end
+  | Nexp_app (Id_aux (Id "div",_) as id,[n1;n2]) ->
+     begin
+       let (Nexp_aux (n1_simp, _) as n1) = nexp_simp n1 in
+       let (Nexp_aux (n2_simp, _) as n2) = nexp_simp n2 in
+       match n1_simp, n2_simp with
+       | Nexp_constant c1, Nexp_constant c2 -> Nexp_constant (Big_int.div c1 c2)
+       | _, _ -> Nexp_app (id,[n1;n2])
      end
   | nexp -> nexp
 
@@ -710,6 +721,21 @@ let rec string_of_index_range (BF_aux (ir, _)) =
   | BF_range (n, m) -> Big_int.to_string n ^ " .. " ^ Big_int.to_string m
   | BF_concat (ir1, ir2) -> "(" ^ string_of_index_range ir1 ^ ") : (" ^ string_of_index_range ir2 ^ ")"
 
+
+let rec pat_ids (P_aux (pat_aux, _)) =
+  match pat_aux with
+  | P_lit _ | P_wild -> IdSet.empty
+  | P_id id -> IdSet.singleton id
+  | P_as (pat, id) -> IdSet.add id (pat_ids pat)
+  | P_var (pat, _) | P_typ (_, pat) -> pat_ids pat
+  | P_app (_, pats) | P_tup pats | P_vector pats | P_vector_concat pats | P_list pats ->
+     List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
+  | P_cons (pat1, pat2) ->
+     IdSet.union (pat_ids pat1) (pat_ids pat2)
+  | P_record (fpats, _) ->
+     List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
+and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
+
 let id_of_fundef (FD_aux (FD_function (_, _, _, funcls), (l, _))) =
   match (List.fold_right
            (fun (FCL_aux (FCL_Funcl (id, _), _)) id' ->
@@ -730,6 +756,20 @@ let id_of_type_def_aux = function
   | TD_enum (id, _, _, _)
   | TD_bitfield (id, _, _) -> id
 let id_of_type_def (TD_aux (td_aux, _)) = id_of_type_def_aux td_aux
+
+let id_of_val_spec (VS_aux (VS_val_spec (_, id, _, _), _)) = id
+
+let ids_of_def = function
+  | DEF_kind (KD_aux (KD_nabbrev (_, id, _, _), _)) -> IdSet.singleton id
+  | DEF_type td -> IdSet.singleton (id_of_type_def td)
+  | DEF_fundef fd -> IdSet.singleton (id_of_fundef fd)
+  | DEF_val (LB_aux (LB_val (pat, _), _)) -> pat_ids pat
+  | DEF_reg_dec (DEC_aux (DEC_reg (_, id), _)) -> IdSet.singleton id
+  | DEF_spec vs -> IdSet.singleton (id_of_val_spec vs)
+  | DEF_internal_mutrec fds -> IdSet.of_list (List.map id_of_fundef fds)
+  | _ -> IdSet.empty
+let ids_of_defs (Defs defs) =
+  List.fold_left IdSet.union IdSet.empty (List.map ids_of_def defs)
 
 module BE = struct
   type t = base_effect
@@ -963,25 +1003,12 @@ let split_defs f (Defs defs) =
      Some (Defs (List.rev pre_defs), def, Defs post_defs)
 
 let append_ast (Defs ast1) (Defs ast2) = Defs (ast1 @ ast2)
+let concat_ast asts = List.fold_right append_ast asts (Defs [])
 
 let type_union_id (Tu_aux (aux, _)) = match aux with
   | Tu_id id -> id
   | Tu_ty_id (_, id) -> id
 
-
-let rec pat_ids (P_aux (pat_aux, _)) =
-  match pat_aux with
-  | P_lit _ | P_wild -> IdSet.empty
-  | P_id id -> IdSet.singleton id
-  | P_as (pat, id) -> IdSet.add id (pat_ids pat)
-  | P_var (pat, _) | P_typ (_, pat) -> pat_ids pat
-  | P_app (_, pats) | P_tup pats | P_vector pats | P_vector_concat pats | P_list pats ->
-     List.fold_right IdSet.union (List.map pat_ids pats) IdSet.empty
-  | P_cons (pat1, pat2) ->
-     IdSet.union (pat_ids pat1) (pat_ids pat2)
-  | P_record (fpats, _) ->
-     List.fold_right IdSet.union (List.map fpat_ids fpats) IdSet.empty
-and fpat_ids (FP_aux (FP_Fpat (_, pat), _)) = pat_ids pat
 
 let rec subst id value (E_aux (e_aux, annot) as exp) =
   let wrap e_aux = E_aux (e_aux, annot) in

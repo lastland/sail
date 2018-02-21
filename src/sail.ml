@@ -88,7 +88,7 @@ let options = Arg.align ([
     Arg.Tuple [Arg.Set opt_print_ocaml; Arg.Set Initial_check.opt_undefined_gen; Arg.Set Ocaml_backend.opt_trace_ocaml],
     " output an OCaml translated version of the input with tracing instrumentation, implies -ocaml");
   ( "-c",
-    Arg.Tuple [Arg.Set opt_print_c; (* Arg.Set Initial_check.opt_undefined_gen *)],
+    Arg.Tuple [Arg.Set opt_print_c; Arg.Set Initial_check.opt_undefined_gen],
     " output a C translated version of the input");
   ( "-lem_ast",
     Arg.Set opt_print_lem_ast,
@@ -267,8 +267,11 @@ let main() =
          C_backend.compile_ast (C_backend.initial_ctx type_envs) ast_c
        else ());
       (if !(opt_print_lem)
-       then let ast_lem = rewrite_ast_lem ast in
-            output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
+       then
+         let mwords = !Pretty_print_lem.opt_mwords in
+         let type_envs, ast_lem = State.add_regstate_defs mwords type_envs ast in
+         let ast_lem = rewrite_ast_lem ast_lem in
+         output "" (Lem_out (!opt_libs_lem)) [out_name,ast_lem]
        else ());
     end
 

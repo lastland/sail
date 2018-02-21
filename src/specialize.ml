@@ -80,6 +80,10 @@ let id_of_instantiation id instantiation =
   let str = Util.zencode_string (Util.string_of_list ", " string_of_binding (KBindings.bindings instantiation)) ^ "#" in
   prepend_id str id
 
+let string_of_instantiation instantiation =
+  let string_of_binding (kid, uvar) = string_of_kid kid ^ " => " ^ Type_check.string_of_uvar uvar in
+  Util.zencode_string (Util.string_of_list ", " string_of_binding (KBindings.bindings instantiation))
+
 (* Returns a list of all the instantiations of a function id in an
    ast. *)
 let rec instantiations_of id ast =
@@ -161,6 +165,7 @@ let specialize_id_valspec instantiations id ast =
        let typschm = mk_typschm typq typ in
 
        let spec_id = id_of_instantiation id instantiation in
+
        if IdSet.mem spec_id !spec_ids then [] else
          begin
            spec_ids := IdSet.add spec_id !spec_ids;
@@ -176,9 +181,16 @@ let specialize_id_fundef instantiations id ast =
   match split_defs (is_fundef id) ast with
   | None -> ast
   | Some (pre_ast, DEF_fundef fundef, post_ast) ->
-     let fundefs =
-       List.map (fun i -> DEF_fundef (rename_fundef (id_of_instantiation id i) fundef)) instantiations
+     let spec_ids = ref IdSet.empty in
+     let specialize_fundef instantiation =
+       let spec_id = id_of_instantiation id instantiation in
+       if IdSet.mem spec_id !spec_ids then [] else
+         begin
+           spec_ids := IdSet.add spec_id !spec_ids;
+           [DEF_fundef (rename_fundef spec_id fundef)]
+         end
      in
+     let fundefs = List.map specialize_fundef instantiations |> List.concat in
      append_ast pre_ast (append_ast (Defs fundefs) post_ast)
   | Some _ -> assert false (* unreachable *)
 
@@ -202,7 +214,7 @@ let specialize_id_overloads instantiations id (Defs defs) =
    valspecs are then re-specialized. This process is iterated until
    the whole spec is specialized. *)
 let remove_unused_valspecs ast =
-  let calls = ref (IdSet.singleton (mk_id "main")) in
+  let calls = ref (IdSet.of_list [mk_id "main"; mk_id "execute"; mk_id "decode"; mk_id "initialize_registers"]) in
   let vs_ids = Initial_check.val_spec_ids ast in
 
   let inspect_exp = function
