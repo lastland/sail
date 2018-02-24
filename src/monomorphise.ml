@@ -69,6 +69,11 @@ let bindings_union s1 s2 =
   |  _, (Some x) -> Some x
   |  (Some x), _ -> Some x
   |  _,  _ -> None) s1 s2
+let kbindings_union s1 s2 =
+  KBindings.merge (fun _ x y -> match x,y with
+  |  _, (Some x) -> Some x
+  |  (Some x), _ -> Some x
+  |  _,  _ -> None) s1 s2
 
 let subst_nexp substs nexp =
   let rec s_snexp substs (Nexp_aux (ne,l) as nexp) =
@@ -615,9 +620,9 @@ let bindings_from_pat p =
   and aux_fpat (FP_aux (FP_Fpat (_,p), _)) = aux_pat p
   in aux_pat p
 
-let remove_bound env pat =
+let remove_bound (substs,ksubsts) pat =
   let bound = bindings_from_pat pat in
-  List.fold_left (fun sub v -> Bindings.remove v sub) env bound
+  List.fold_left (fun sub v -> Bindings.remove v sub) substs bound, ksubsts
 
 (* Attempt simple pattern matches *)
 let lit_match = function
@@ -721,6 +726,30 @@ let int_of_str_lit = function
   | L_bin bin -> Big_int.of_string ("0b" ^ bin)
   | _ -> assert false
 
+let bits_of_lit = function
+  | L_bin bin -> bin
+  | L_hex hex -> hex_to_bin hex
+  | _ -> assert false
+
+let slice_lit (L_aux (lit,ll)) i len (Ord_aux (ord,_)) =
+  let i = Big_int.to_int i in
+  let len = Big_int.to_int len in
+  match match ord with
+  | Ord_inc -> Some i
+  | Ord_dec -> Some (len - i)
+  | Ord_var _ -> None
+  with
+  | None -> None
+  | Some i ->
+     match lit with
+     | L_bin bin -> Some (L_aux (L_bin (String.sub bin i len),Generated ll))
+     | _ -> assert false
+
+let concat_vec lit1 lit2 =
+  let bits1 = bits_of_lit lit1 in
+  let bits2 = bits_of_lit lit2 in
+  L_bin (bits1 ^ bits2)
+
 let lit_eq (L_aux (l1,_)) (L_aux (l2,_)) =
   match l1,l2 with
   | (L_zero|L_false), (L_zero|L_false)
@@ -758,15 +787,46 @@ let try_app (l,ann) (id,args) =
     | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit,_), _)] ->
        Some (E_aux (E_lit (L_aux (L_num (int_of_str_lit lit),new_l)),(l,ann)))
     | _ -> None
+  else if is_id "slice" then
+    match args with
+    | [E_aux (E_lit (L_aux ((L_hex _| L_bin _),_) as lit),
+              (_,Some (_,Typ_aux (Typ_app (_,[_;Typ_arg_aux (Typ_arg_order ord,_);_]),_),_)));
+       E_aux (E_lit L_aux (L_num i,_), _);
+       E_aux (E_lit L_aux (L_num len,_), _)] ->
+       (match slice_lit lit i len ord with
+       | Some lit' -> Some (E_aux (E_lit lit',(l,ann)))
+       | None -> None)
+    | _ -> None
+  else if is_id "bitvector_concat" then
+    match args with
+    | [E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit1,_), _);
+       E_aux (E_lit L_aux ((L_hex _| L_bin _) as lit2,_), _)] ->
+       Some (E_aux (E_lit (L_aux (concat_vec lit1 lit2,new_l)),(l,ann)))
+    | _ -> None
   else if is_id "shl_int" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.shift_left i (Big_int.to_int j)),new_l)),(l,ann)))
     | _ -> None
-  else if is_id "mult_int" then
+  else if is_id "mult_int" || is_id "mult_range" then
     match args with
     | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
        Some (E_aux (E_lit (L_aux (L_num (Big_int.mul i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "quotient_nat" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.div i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "add_range" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_); E_aux (E_lit L_aux (L_num j,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.add i j),new_l)),(l,ann)))
+    | _ -> None
+  else if is_id "negate_range" then
+    match args with
+    | [E_aux (E_lit L_aux (L_num i,_),_)] ->
+       Some (E_aux (E_lit (L_aux (L_num (Big_int.negate i),new_l)),(l,ann)))
     | _ -> None
   else if is_id "ex_int" then
     match args with
@@ -933,6 +993,20 @@ let stop_at_false_assertions e =
     let l = Generated Unknown in
     E_aux (E_exit (E_aux (E_lit (L_aux (L_unit,l)),(l,None))),(l,None))
   in
+  let rec nc_false (NC_aux (nc,_)) =
+    match nc with
+    | NC_false -> true
+    | NC_and (nc1,nc2) -> nc_false nc1 || nc_false nc2
+    | _ -> false
+  in
+  let rec exp_false (E_aux (e,_)) =
+    match e with
+    | E_constraint nc -> nc_false nc
+    | E_lit (L_aux (L_false,_)) -> true
+    | E_app (Id_aux (Id "and_bool",_),[e1;e2]) ->
+       exp_false e1 || exp_false e2
+    | _ -> false
+  in
   let rec exp (E_aux (e,ann) as ea) =
     match e with
     | E_block es ->
@@ -969,9 +1043,7 @@ let stop_at_false_assertions e =
           let e2,stop = exp e2 in
           E_aux (E_let (LB_aux (LB_val (p,e1),lbann),e2),ann), stop
        end
-    | E_assert (E_aux (E_constraint (NC_aux (NC_false,_)),_),_) ->
-       ea, Some (typ_of_annot ann)
-    | E_assert (E_aux (E_lit (L_aux (L_false,_)),_),_) ->
+    | E_assert (e1,_) when exp_false e1 ->
        ea, Some (typ_of_annot ann)
     | _ -> ea, None
   in fst (exp e)
@@ -1034,6 +1106,13 @@ let apply_pat_choices choices =
     e_assert = rewrite_assert;
     e_case = rewrite_case }
 
+(* Check whether the current environment with the given kid assignments is
+   inconsistent (and hence whether the code is dead) *)
+let is_env_inconsistent env ksubsts =
+  let env = KBindings.fold (fun k nexp env ->
+    Env.add_constraint (nc_eq (nvar k) nexp) env) ksubsts env in
+  prove env nc_false
+
 let split_defs all_errors splits defs =
   let no_errors_happened = ref true in
   let split_constructors (Defs defs) =
@@ -1065,8 +1144,13 @@ let split_defs all_errors splits defs =
 
   let (refinements, defs') = split_constructors defs in
 
+  (* COULD DO: dead code is only eliminated at if expressions, but we could
+     also cut out impossible case branches and code after assertions. *)
+
   (* Constant propogation.
      Takes maps of immutable/mutable variables to subsitute.
+     The substs argument also contains the current type-level kid refinements
+     so that we can check for dead code.
      Extremely conservative about evaluation order of assignments in
      subexpressions, dropping assignments rather than committing to
      any particular order *)
@@ -1123,7 +1207,7 @@ let split_defs all_errors splits defs =
        let env = Type_check.env_of_annot (l, annot) in
        (try
          match Env.lookup_id id env with
-         | Local (Immutable,_) -> Bindings.find id substs
+         | Local (Immutable,_) -> Bindings.find id (fst substs)
          | Local (Mutable,_)   -> Bindings.find id assigns
          | _ -> exp
        with Not_found -> exp),assigns
@@ -1154,20 +1238,48 @@ let split_defs all_errors splits defs =
        re (E_tuple es') assigns
     | E_if (e1,e2,e3) ->
        let e1',assigns = const_prop_exp substs assigns e1 in
-       let e2',assigns2 = const_prop_exp substs assigns e2 in
-       let e3',assigns3 = const_prop_exp substs assigns e3 in
-       (match drop_casts e1' with
+       let e1_no_casts = drop_casts e1' in
+       (match e1_no_casts with
        | E_aux (E_lit (L_aux ((L_true|L_false) as lit ,_)),_) ->
-          (match lit with L_true -> e2',assigns2 | _ -> e3',assigns3)
+          (match lit with
+          | L_true -> const_prop_exp substs assigns e2
+          |  _     -> const_prop_exp substs assigns e3)
        | _ ->
-          let assigns = isubst_minus_set assigns (assigned_vars e2) in
-          let assigns = isubst_minus_set assigns (assigned_vars e3) in
-          re (E_if (e1',e2',e3')) assigns)
+          (* If the guard is an equality check, propagate the value. *)
+          let env1 = env_of e1_no_casts in
+          let is_equal id =
+            List.exists (fun id' -> Id.compare id id' == 0)
+              (Env.get_overloads (Id_aux (DeIid "==", Parse_ast.Unknown))
+                 env1)
+          in
+          let substs_true =
+            match e1_no_casts with
+            | E_aux (E_app (id, [E_aux (E_id var,_); vl]),_)
+            | E_aux (E_app (id, [vl; E_aux (E_id var,_)]),_)
+                when is_equal id ->
+               if is_value vl then
+                 (match Env.lookup_id var env1 with
+                 | Local (Immutable,_) -> Bindings.add var vl (fst substs),snd substs
+                 | _ -> substs)
+               else substs
+            | _ -> substs
+          in
+          (* Discard impossible branches *)
+          if is_env_inconsistent (env_of e2) (snd substs) then
+            const_prop_exp substs assigns e3
+          else if is_env_inconsistent (env_of e3) (snd substs) then
+            const_prop_exp substs_true assigns e2
+          else
+            let e2',assigns2 = const_prop_exp substs_true assigns e2 in
+            let e3',assigns3 = const_prop_exp substs assigns e3 in
+            let assigns = isubst_minus_set assigns (assigned_vars e2) in
+            let assigns = isubst_minus_set assigns (assigned_vars e3) in
+            re (E_if (e1',e2',e3')) assigns)
     | E_for (id,e1,e2,e3,ord,e4) ->
        (* Treat e1, e2 and e3 (from, to and by) as a non-det tuple *)
        let e1',e2',e3',assigns = non_det_exp_3 e1 e2 e3 in
        let assigns = isubst_minus_set assigns (assigned_vars e4) in
-       let e4',_ = const_prop_exp (Bindings.remove id substs) assigns e4 in
+       let e4',_ = const_prop_exp (Bindings.remove id (fst substs),snd substs) assigns e4 in
        re (E_for (id,e1',e2',e3',ord,e4')) assigns
     | E_loop (loop,e1,e2) ->
        let assigns = isubst_minus_set assigns (IdSet.union (assigned_vars e1) (assigned_vars e2)) in
@@ -1227,7 +1339,7 @@ let split_defs all_errors splits defs =
        | Some (E_aux (_,(_,annot')) as exp,newbindings,kbindings) ->
           let exp = nexp_subst_exp (kbindings_from_list kbindings) exp in
           let newbindings_env = bindings_from_list newbindings in
-          let substs' = bindings_union substs newbindings_env in
+          let substs' = bindings_union (fst substs) newbindings_env, snd substs in
           const_prop_exp substs' assigns exp)
     | E_let (lb,e2) ->
        begin
@@ -1245,7 +1357,7 @@ let split_defs all_errors splits defs =
               | Some (e'',bindings,kbindings) ->
                  let e'' = nexp_subst_exp (kbindings_from_list kbindings) e'' in
                  let bindings = bindings_from_list bindings in
-                 let substs'' = bindings_union substs' bindings in
+                 let substs'' = bindings_union (fst substs') bindings, snd substs' in
                  const_prop_exp substs'' assigns e''
             else plain ()
        end
@@ -1350,9 +1462,9 @@ let split_defs all_errors splits defs =
          let cases = List.map (function
            | FCL_aux (FCL_Funcl (_,pexp), ann) -> pexp)
            fcls in
-         match can_match_with_env env arg cases Bindings.empty Bindings.empty with
+         match can_match_with_env env arg cases (Bindings.empty,KBindings.empty) Bindings.empty with
          | Some (exp,bindings,kbindings) ->
-            let substs = bindings_from_list bindings in
+            let substs = bindings_from_list bindings, kbindings_from_list kbindings in
             let result,_ = const_prop_exp substs Bindings.empty exp in
             let result = match result with
               | E_aux (E_return e,_) -> e
@@ -1361,7 +1473,7 @@ let split_defs all_errors splits defs =
             if is_value result then Some result else None
          | None -> None
 
-  and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases substs assigns =
+  and can_match_with_env env (E_aux (e,(l,annot)) as exp0) cases (substs,ksubsts) assigns =
     let rec findpat_generic check_pat description assigns = function
       | [] -> (Reporting_basic.print_err false true l "Monomorphisation"
                  ("Failed to find a case for " ^ description); None)
@@ -1373,7 +1485,7 @@ let split_defs all_errors splits defs =
          Some (exp, [(id', exp0)], [])
       | (Pat_aux (Pat_when (P_aux (P_id id',_),guard,exp),_))::tl
           when pat_id_is_variable env id' -> begin
-            let substs = Bindings.add id' exp0 substs in
+            let substs = Bindings.add id' exp0 substs, ksubsts in
             let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
             match guard with
             | E_lit (L_aux (L_true,_)) -> Some (exp,[(id',exp0)],[])
@@ -1385,7 +1497,8 @@ let split_defs all_errors splits defs =
         | DoesNotMatch -> findpat_generic check_pat description assigns tl
         | DoesMatch (vsubst,ksubst) -> begin
           let guard = nexp_subst_exp (kbindings_from_list ksubst) guard in
-          let substs = bindings_union substs (bindings_from_list vsubst) in
+          let substs = bindings_union substs (bindings_from_list vsubst),
+                       kbindings_union ksubsts (kbindings_from_list ksubst) in
           let (E_aux (guard,_)),assigns = const_prop_exp substs assigns guard in
           match guard with
           | E_lit (L_aux (L_true,_)) -> Some (exp,vsubst,ksubst)
@@ -1463,8 +1576,8 @@ let split_defs all_errors splits defs =
     can_match_with_env env exp
   in
 
-  let subst_exp substs exp =
-    let substs = bindings_from_list substs in
+  let subst_exp substs ksubsts exp =
+    let substs = bindings_from_list substs, ksubsts in
     fst (const_prop_exp substs Bindings.empty exp)
   in
     
@@ -1813,8 +1926,9 @@ let split_defs all_errors splits defs =
          | VarSplit patsubsts ->
             if check_split_size patsubsts (pat_loc p) then
               List.map (fun (pat',substs,pchoices,ksubsts) ->
-                let exp' = nexp_subst_exp (kbindings_from_list ksubsts) e in
-                let exp' = subst_exp substs exp' in
+                let ksubsts = kbindings_from_list ksubsts in
+                let exp' = nexp_subst_exp ksubsts e in
+                let exp' = subst_exp substs ksubsts exp' in
                 let exp' = apply_pat_choices pchoices exp' in
                 let exp' = stop_at_false_assertions exp' in
                 Pat_aux (Pat_exp (pat', map_exp exp'),l))
@@ -1833,11 +1947,12 @@ let split_defs all_errors splits defs =
          | VarSplit patsubsts ->
             if check_split_size patsubsts (pat_loc p) then
               List.map (fun (pat',substs,pchoices,ksubsts) ->
-                let exp1' = nexp_subst_exp (kbindings_from_list ksubsts) e1 in
-                let exp1' = subst_exp substs exp1' in
+                let ksubsts = kbindings_from_list ksubsts in
+                let exp1' = nexp_subst_exp ksubsts e1 in
+                let exp1' = subst_exp substs ksubsts exp1' in
                 let exp1' = apply_pat_choices pchoices exp1' in
-                let exp2' = nexp_subst_exp (kbindings_from_list ksubsts) e2 in
-                let exp2' = subst_exp substs exp2' in
+                let exp2' = nexp_subst_exp ksubsts e2 in
+                let exp2' = subst_exp substs ksubsts exp2' in
                 let exp2' = apply_pat_choices pchoices exp2' in
                 let exp2' = stop_at_false_assertions exp2' in
                 Pat_aux (Pat_when (pat', map_exp exp1', map_exp exp2'),l))

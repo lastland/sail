@@ -492,7 +492,7 @@ let append_id id str =
   match id with
   | Id_aux (Id v, l) -> Id_aux (Id (v ^ str), l)
   | Id_aux (DeIid v, l) -> Id_aux (DeIid (v ^ str), l)
-                                  
+
 let prepend_kid str = function
   | Kid_aux (Var v, l) -> Kid_aux (Var ("'" ^ str ^ String.sub v 1 (String.length v - 1)), l)
 
@@ -1099,3 +1099,10 @@ and subst_lexp id value (LEXP_aux (lexp_aux, annot) as lexp) =
     | LEXP_field (lexp, id') -> LEXP_field (subst_lexp id value lexp, id')
   in
   wrap lexp_aux
+
+let hex_to_bin hex =
+  Util.string_to_list hex
+  |> List.map Sail_lib.hex_char
+  |> List.concat
+  |> List.map Sail_lib.char_of_bit
+  |> (fun bits -> String.init (List.length bits) (List.nth bits))
