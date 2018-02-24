@@ -144,7 +144,7 @@ let orig_kid (Kid_aux (Var v, l) as kid) =
   with
   | Not_found -> kid
 
-let is_list (Typ_aux (typ_aux, _)) =
+let destruct_list (Typ_aux (typ_aux, _)) =
   match typ_aux with
   | Typ_app (f, [Typ_arg_aux (Typ_arg_typ typ, _)])
        when string_of_id f = "list" -> Some typ
@@ -361,7 +361,7 @@ module Env : sig
   val fresh_kid : ?kid:kid -> t -> kid
   val expand_synonyms : t -> typ -> typ
   val canonicalize : t -> typ -> typ
-  val is_canonical : t -> typ -> bool  
+  val is_canonical : t -> typ -> bool
   val base_typ_of : t -> typ -> typ
   val add_smt_op : id -> string -> t -> t
   val get_smt_op : id -> t -> string
@@ -588,7 +588,7 @@ end = struct
     match arg_aux with
     | Typ_arg_order _ | Typ_arg_typ _ -> arg
     | Typ_arg_nexp n -> Typ_arg_aux (Typ_arg_nexp (f n), l)
-                                    
+
   let canonical env typ =
     let typ = flatten_existential (expand_synonyms env typ) in
     let counter = ref 0 in
@@ -606,7 +606,7 @@ end = struct
     let existentials = KBindings.bindings !complex_nexps |> List.map fst in
     let constrs = List.fold_left (fun ncs (kid, nexp) -> nc_eq (nvar kid) nexp :: ncs) [] (KBindings.bindings !complex_nexps) in
     existentials, constrs, typ
-                            
+
   let is_canonical env typ =
     let typ = expand_synonyms env typ in
     let counter = ref 0 in
@@ -617,11 +617,11 @@ end = struct
     in
     let typ = map_nexps simplify_nexp typ in
     not (!counter > 0)
-        
+
   let rec canonicalize env typ =
     match typ with
     | Typ_aux (Typ_fn (arg_typ, ret_typ, effects), l) when is_canonical env arg_typ ->
-       Typ_aux (Typ_fn (arg_typ, canonicalize env ret_typ, effects), l) 
+       Typ_aux (Typ_fn (arg_typ, canonicalize env ret_typ, effects), l)
     | Typ_aux (Typ_fn _, l) -> typ_error l ("Function type " ^ string_of_typ typ ^ " is not canonical")
     | _ ->
        let existentials, constrs, (Typ_aux (typ_aux, l) as typ) = canonical env typ in
@@ -633,7 +633,7 @@ end = struct
            | Typ_exist (kids, nc, typ) -> Typ_exist (kids @ existentials, List.fold_left nc_and nc constrs, typ)
            | Typ_fn _ | Typ_id _ | Typ_var _ -> assert false (* These must be simple *)
          in
-         Typ_aux (typ_aux, l)                                   
+         Typ_aux (typ_aux, l)
 
   (* Check if a type, order, n-expression or constraint is
      well-formed. Throws a type error if the type is badly formed. *)
@@ -1099,7 +1099,7 @@ let bind_existential typ env =
   | None -> match destruct_exist env typ with
             | Some (kids, nc, typ) -> typ, add_existential kids nc env
             | None -> typ, env
-              
+
 let destruct_vector env typ =
   let destruct_vector' = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
@@ -1127,18 +1127,6 @@ and is_typ_arg_monomorphic (Typ_arg_aux (arg, _)) =
 (**************************************************************************)
 (* 3. Subtyping and constraint solving                                    *)
 (**************************************************************************)
-                         
-let order_eq (Ord_aux (ord_aux1, _)) (Ord_aux (ord_aux2, _)) =
-  match ord_aux1, ord_aux2 with
-  | Ord_inc, Ord_inc -> true
-  | Ord_dec, Ord_dec -> true
-  | Ord_var kid1, Ord_var kid2 -> Kid.compare kid1 kid2 = 0
-  | _, _ -> false
-
-let rec props_subst sv subst props =
-  match props with
-  | [] -> []
-  | ((nexp1, nexp2) :: props) -> (nexp_subst sv subst nexp1, nexp_subst sv subst nexp2) :: props_subst sv subst props
 
 (* Here's how the constraint generation works for subtyping
 
@@ -1266,7 +1254,7 @@ and typ_arg_nexps (Typ_arg_aux (typ_arg_aux, l)) =
   | Typ_arg_nexp n -> [n]
   | Typ_arg_typ typ -> typ_nexps typ
   | Typ_arg_order ord -> []
-  
+
 let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   match typ_aux with
   | Typ_id v -> KidSet.empty
@@ -1347,13 +1335,11 @@ let typ_identical env typ1 typ2 =
 type uvar =
   | U_nexp of nexp
   | U_order of order
-  | U_effect of effect
   | U_typ of typ
 
 let uvar_subst_nexp sv subst = function
   | U_nexp nexp -> U_nexp (nexp_subst sv subst nexp)
   | U_typ typ -> U_typ (typ_subst_nexp sv subst typ)
-  | U_effect eff -> U_effect eff
   | U_order ord -> U_order ord
 
 exception Unification_error of l * string;;
@@ -1384,7 +1370,6 @@ let rec unify_nexps l env goals (Nexp_aux (nexp_aux1, _) as nexp1) (Nexp_aux (ne
 let string_of_uvar = function
   | U_nexp n -> string_of_nexp n
   | U_order o -> string_of_order o
-  | U_effect eff -> string_of_effect eff
   | U_typ typ -> string_of_typ typ
 
 let unify_order l (Ord_aux (ord_aux1, _) as ord1) (Ord_aux (ord_aux2, _) as ord2) =
@@ -1401,7 +1386,6 @@ let subst_unifiers unifiers typ =
     | U_nexp nexp -> typ_subst_nexp kid (unaux_nexp nexp) typ
     | U_order ord -> typ_subst_order kid (unaux_order ord) typ
     | U_typ subst -> typ_subst_typ kid (unaux_typ subst) typ
-    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier typ (KBindings.bindings unifiers)
 
@@ -1411,7 +1395,6 @@ let subst_args_unifiers unifiers typ_args =
     | U_nexp nexp -> List.map (typ_subst_arg_nexp kid (unaux_nexp nexp)) typ_args
     | U_order ord -> List.map (typ_subst_arg_order kid (unaux_order ord)) typ_args
     | U_typ subst -> List.map (typ_subst_arg_typ kid (unaux_typ subst)) typ_args
-    | _ -> typ_error Parse_ast.Unknown "Cannot subst unifier"
   in
   List.fold_left subst_unifier typ_args (KBindings.bindings unifiers)
 
@@ -1531,12 +1514,17 @@ let uv_nexp_constraint env (kid, uvar) =
   | U_nexp nexp -> Env.add_constraint (nc_eq (nvar kid) nexp) env
   | _ -> env
 
-(* The kid_order function takes a set of Int-kinded kids, and returns
+(* ***** Alpha-equivalence check ***** *)
+
+(* It's important that alpha-equivalent types are always considered
+   subtypes of one another, no matter how complex the types are, in
+   order to ensure that the subtyping relation is reflexive. *)
+
+(** The kid_order function takes a set of Int-kinded kids, and returns
    a list of those kids in the order they appear in a type, as well as
    a set containing all the kids that did not occur in the type. We
    only care about Int-kinded kids because those are the only type
    that can appear in an existential. *)
-
 let rec kid_order_nexp kids (Nexp_aux (aux, l) as nexp) =
   match aux with
   | Nexp_var kid when KidSet.mem kid kids -> ([kid], KidSet.remove kid kids)
@@ -1598,7 +1586,7 @@ let rec alpha_equivalent env typ1 typ2 =
   if typ_identical env typ1 typ2
   then (typ_debug "alpha-equivalent"; true)
   else (typ_debug "Not alpha-equivalent"; false)
-         
+
 let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as typ2) =
   typ_print ("Subtype " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
   match typ_aux1, typ_aux2 with
@@ -1612,7 +1600,7 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
   (* Special case for two existentially quantified numeric (atom) types *)
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential kids1 nc1 env in
-     let env = add_typ_vars (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))) env in 
+     let env = add_typ_vars (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))) env in
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
      let constr var_of =
        Constraint.forall (List.map var_of kids2)
@@ -1641,7 +1629,7 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
      in
      if prove env nc then ()
      else typ_error l ("Could not show " ^ string_of_typ typ1 ^ " is a subset of " ^ string_of_typ typ2)
-                       
+
 let typ_equality l env typ1 typ2 =
   subtyp l env typ1 typ2; subtyp l env typ2 typ1
 
@@ -1714,7 +1702,6 @@ let rec instantiate_quants quants kid uvar = match quants with
           if is_typ_kid kid kinded_id
           then instantiate_quants quants kid uvar
           else quant :: instantiate_quants quants kid uvar
-       | _ -> typ_error Parse_ast.Unknown "Cannot instantiate quantifier"
      end
   | ((QI_aux (QI_const nc, l)) :: quants) ->
      begin
@@ -1724,16 +1711,15 @@ let rec instantiate_quants quants kid uvar = match quants with
        | _ -> (QI_aux (QI_const nc, l)) :: instantiate_quants quants kid uvar
      end
 
-let destruct_vec_typ l env typ =
-  let destruct_vec_typ' l = function
+let destruct_vector_typ l env typ =
+  let destruct_vector_typ' l = function
     | Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp n1, _);
                              Typ_arg_aux (Typ_arg_order o, _);
                              Typ_arg_aux (Typ_arg_typ vtyp, _)]
                        ), _) when string_of_id id = "vector" -> (n1, o, vtyp)
     | typ -> typ_error l ("Expected vector type, got " ^ string_of_typ typ)
   in
-  destruct_vec_typ' l (Env.expand_synonyms env typ)
-
+  destruct_vector_typ' l (Env.expand_synonyms env typ)
 
 let env_of_annot (l, tannot) = match tannot with
   | Some (env, _, _) -> env
@@ -1750,11 +1736,8 @@ let env_of_annot (l, tannot) = match tannot with
   | None -> raise (Reporting_basic.err_unreachable l "no type annotation")
 
 let typ_of (E_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
-
 let env_of (E_aux (_, (l, tannot))) = env_of_annot (l, tannot)
-
 let pat_typ_of (P_aux (_, (l, tannot))) = typ_of_annot (l, tannot)
-
 let pat_env_of (P_aux (_, (l, tannot))) = env_of_annot (l, tannot)
 
 (* Flow typing *)
@@ -1901,24 +1884,18 @@ let rec add_constraints constrs env =
    to filter out the possible casts to only those that could
    reasonably apply. We don't mind if we try some coercions that are
    impossible, but we should be careful to never rule out a possible
-   cast - match_typ and filter_casts implement this logic. It must be
+   cast - similar_typ and filter_casts implement this logic. It must be
    the case that if two types unify, then they match. *)
-let rec match_typ env typ1 typ2 =
+let rec similar_typ env typ1 typ2 =
   let Typ_aux (typ1_aux, _) = Env.expand_synonyms env typ1 in
   let Typ_aux (typ2_aux, _) = Env.expand_synonyms env typ2 in
   match typ1_aux, typ2_aux with
-  | Typ_exist (_, _, typ1), _ -> match_typ env typ1 typ2
-  | _, Typ_exist (_, _, typ2) -> match_typ env typ1 typ2
+  | Typ_exist (_, _, typ1), _ -> similar_typ env typ1 typ2
+  | _, Typ_exist (_, _, typ2) -> similar_typ env typ1 typ2
   | _, Typ_var kid2 -> true
   | Typ_id v1, Typ_id v2 when Id.compare v1 v2 = 0 -> true
-  | Typ_id v1, Typ_id v2 when string_of_id v1 = "int" && string_of_id v2 = "nat" -> true
-  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 (match_typ env) typs1 typs2
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" && string_of_id f = "atom" -> true
+  | Typ_tup typs1, Typ_tup typs2 -> List.for_all2 (similar_typ env) typs1 typs2
   | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "atom" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "nat" &&  string_of_id f = "range" -> true
-  | Typ_id v, Typ_app (f, _) when string_of_id v = "int" &&  string_of_id f = "range" -> true
-  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "range" && string_of_id f2 = "atom" -> true
-  | Typ_app (f1, _), Typ_app (f2, _) when string_of_id f1 = "atom" && string_of_id f2 = "range" -> true
   | Typ_app (f1, _), Typ_app (f2, _) when Id.compare f1 f2 = 0 -> true
   | Typ_id v1, Typ_app (f2, _) when Id.compare v1 f2 = 0 -> true
   | Typ_app (f1, _), Typ_id v2 when Id.compare f1 v2 = 0 -> true
@@ -1931,7 +1908,7 @@ let rec filter_casts env from_typ to_typ casts =
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
        | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
-            when match_typ env from_typ cast_from_typ && match_typ env to_typ cast_to_typ ->
+            when similar_typ env from_typ cast_from_typ && similar_typ env to_typ cast_to_typ ->
           typ_print ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ);
           cast :: filter_casts env from_typ to_typ casts
        | _ -> filter_casts env from_typ to_typ casts
@@ -1942,6 +1919,10 @@ let is_union_id id env =
   match Env.lookup_id id env with
   | Union (_, _) -> true
   | _ -> false
+
+(* crule and irule are intended to wrap calls to check_exp and
+   infer_exp. They add the tracing information and keep track of the
+   depth, so that a type derivation tree can be constructed. *)
 
 let crule r env exp typ =
   incr depth;
@@ -2010,6 +1991,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        in
        annot_exp (E_block (check_block l env exps typ)) typ
      end
+
   | E_case (exp, cases), _ ->
      Pattern_completeness.check l (Env.pattern_completeness_ctx env) cases;
      let inferred_exp = irule infer_exp env exp in
@@ -2018,23 +2000,23 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
   | E_try (exp, cases), _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_try (checked_exp, List.map (fun case -> check_case env exc_typ case typ) cases)) typ
+
   | E_cons (x, xs), _ ->
-     begin
-       match is_list (Env.expand_synonyms env typ) with
-       | Some elem_typ ->
-          let checked_xs = crule check_exp env xs typ in
-          let checked_x = crule check_exp env x elem_typ in
-          annot_exp (E_cons (checked_x, checked_xs)) typ
-       | None -> typ_error l ("Cons " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
+     begin match destruct_list typ with
+     | Some elem_typ ->
+        let checked_xs = crule check_exp env xs typ in
+        let checked_x = crule check_exp env x elem_typ in
+        annot_exp (E_cons (checked_x, checked_xs)) typ
+     | None -> typ_error l ("Cons " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
   | E_list xs, _ ->
-     begin
-       match is_list (Env.expand_synonyms env typ) with
-       | Some elem_typ ->
-          let checked_xs = List.map (fun x -> crule check_exp env x elem_typ) xs in
-          annot_exp (E_list checked_xs) typ
-       | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
+     begin match destruct_list typ with
+     | Some elem_typ ->
+        let checked_xs = List.map (fun x -> crule check_exp env x elem_typ) xs in
+        annot_exp (E_list checked_xs) typ
+     | None -> typ_error l ("List " ^ string_of_exp exp ^ " must have list type, got " ^ string_of_typ typ)
      end
+
   | E_record_update (exp, FES_aux (FES_Fexps (fexps, flag), (l, ()))), _ ->
      (* TODO: this could also infer exp - also fix code duplication with E_record below *)
      let checked_exp = crule check_exp env exp typ in
@@ -2066,6 +2048,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
        FE_aux (FE_Fexp (field, checked_exp), (l, None))
      in
      annot_exp (E_record (FES_aux (FES_Fexps (List.map check_fexp fexps, flag), (l, None)))) typ
+
   | E_let (LB_aux (letbind, (let_loc, _)), exp), _ ->
      begin
        match letbind with
@@ -2079,9 +2062,8 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           let tpat, env = bind_pat_no_guard env pat (typ_of inferred_bind) in
           annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
-  | E_app_infix (x, op, y), _ ->
-     check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
-  | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "_prove") = 0 ->
+
+  | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "__prove") = 0 ->
      Env.wf_constraint env nc;
      if prove env nc
      then annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
@@ -2098,27 +2080,30 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
          end
      in
      try_overload ([], Env.get_overloads f env)
+  | E_app_infix (x, op, y), _ ->
+     check_exp env (E_aux (E_app (deinfix op, [x; y]), (l, ()))) typ
+  | E_app (f, xs), _ -> type_coercion env (infer_funapp l env f xs (Some typ)) typ
+
   | E_return exp, _ ->
      let checked_exp = match Env.get_ret_typ env with
        | Some ret_typ -> crule check_exp env exp ret_typ
-       | None -> typ_error l "Cannot use return outside a function"
+       | None -> typ_error l "Cannot use return outside a function body"
      in
      annot_exp (E_return checked_exp) typ
-  | E_app (f, xs), _ ->
-     let inferred_exp = infer_funapp l env f xs (Some typ) in
-     type_coercion env inferred_exp typ
-  | E_if (cond, then_branch, else_branch), _ ->
-     let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
-     let flows, constrs = infer_flow env cond' in
-     let then_branch' = crule check_exp (add_constraints constrs (add_flows true flows env)) then_branch typ in
-     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch typ in
-     annot_exp (E_if (cond', then_branch', else_branch')) typ
   | E_exit exp, _ ->
      let checked_exp = crule check_exp env exp (mk_typ (Typ_id (mk_id "unit"))) in
      annot_exp_effect (E_exit checked_exp) typ (mk_effect [BE_escape])
   | E_throw exp, _ ->
      let checked_exp = crule check_exp env exp exc_typ in
      annot_exp_effect (E_throw checked_exp) typ (mk_effect [BE_escape])
+
+  | E_if (cond, then_branch, else_branch), _ ->
+     let cond' = crule check_exp env cond (mk_typ (Typ_id (mk_id "bool"))) in
+     let flows, constrs = infer_flow env cond' in
+     let then_branch' = crule check_exp (add_constraints constrs (add_flows true flows env)) then_branch typ in
+     let else_branch' = crule check_exp (add_constraints (List.map nc_negate constrs) (add_flows false flows env)) else_branch typ in
+     annot_exp (E_if (cond', then_branch', else_branch')) typ
+
   | E_var (lexp, bind, exp), _ ->
      let lexp, bind, env = match bind_assignment env lexp bind with
        | E_aux (E_assign (lexp, bind), _), env -> lexp, bind, env
@@ -2126,6 +2111,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      in
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_var (lexp, bind, checked_exp)) typ
+
   | E_internal_return exp, _ ->
      let checked_exp = crule check_exp env exp typ in
      annot_exp (E_internal_return checked_exp) typ
@@ -2153,19 +2139,22 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let checked_body = crule check_exp env body typ in
      annot_exp (E_internal_plet (tpat, bind_exp, checked_body)) typ
   | E_vector vec, _ ->
-     let (len, ord, vtyp) = destruct_vec_typ l env typ in
+     let (len, ord, vtyp) = destruct_vector_typ l env typ in
      let checked_items = List.map (fun i -> crule check_exp env i vtyp) vec in
      if prove env (nc_eq (nint (List.length vec)) (nexp_simp len)) then annot_exp (E_vector checked_items) typ
-     else typ_error l "List length didn't match" (* FIXME: improve error message *)
+     else typ_error l ("Vector literal length didn't match type " ^ string_of_typ typ)
+
+  (* undefined is the only literal that can't be inferred, only checked. *)
   | E_lit (L_aux (L_undef, _) as lit), _ ->
      if is_typ_monomorphic typ || Env.polymorphic_undefineds env
      then annot_exp_effect (E_lit lit) typ (mk_effect [BE_undef])
      else typ_error l ("Type " ^ string_of_typ typ ^ " failed undefined monomorphism restriction")
+  (* most identifiers can be inferred but nullary union constructors (e.g. None in option) are special. *)
   | E_id id, _ when is_union_id id env ->
      begin
        match Env.lookup_id id env with
        | Union (typq, ctor_typ) ->
-          let inferred_exp = fst (infer_funapp' l env id (typq, mk_typ (Typ_fn (unit_typ, ctor_typ, no_effect))) [mk_lit_exp L_unit] (Some typ)) in
+          let inferred_exp = fst (infer_funapp' l env id (typq, function_typ unit_typ ctor_typ no_effect) [mk_lit_exp L_unit] (Some typ)) in
           annot_exp (E_id id) (typ_of inferred_exp)
        | _ -> assert false (* Unreachble due to guard *)
      end
@@ -2284,7 +2273,7 @@ and bind_pat_no_guard env (P_aux (_,(l,_)) as pat) typ =
   | tpat, env, [] -> tpat, env
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
-  let (Typ_aux (typ_aux, _) as typ), env = bind_existential typ env in  
+  let (Typ_aux (typ_aux, _) as typ), env = bind_existential typ env in
   typ_print ("Binding " ^ string_of_pat pat ^  " to " ^ string_of_typ typ);
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
   let switch_typ pat typ = match pat with
@@ -2447,9 +2436,9 @@ and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
      in
      let inferred_pats, env, guards =
        List.fold_left fold_pats ([], env, []) (pat :: pats) in
-     let (len, _, vtyp) = destruct_vec_typ l env (pat_typ_of (List.hd inferred_pats)) in
+     let (len, _, vtyp) = destruct_vector_typ l env (pat_typ_of (List.hd inferred_pats)) in
      let fold_len len pat =
-       let (len', _, vtyp') = destruct_vec_typ l env (pat_typ_of pat) in
+       let (len', _, vtyp') = destruct_vector_typ l env (pat_typ_of pat) in
        typ_equality l env vtyp vtyp';
        nsum len len'
      in
@@ -2994,7 +2983,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let instantiate_ret env quants typs ret_typ =
     match ret_ctx_typ with
     | None -> (quants, typs, ret_typ, env)
-    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env) 
+    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env)
     | Some rct ->
        begin
          typ_debug ("RCT is " ^ string_of_typ rct);
@@ -3033,7 +3022,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let ty_vars = List.map fst (KBindings.bindings (Env.get_typ_vars env)) in
   let existentials = List.filter (fun kid -> not (KBindings.mem kid universals)) ty_vars in
   let num_new_ncs = List.length (Env.get_constraints env) - List.length universal_constraints in
-  let ex_constraints = take num_new_ncs (Env.get_constraints env) in 
+  let ex_constraints = take num_new_ncs (Env.get_constraints env) in
 
   typ_debug ("Existentials: " ^ string_of_list ", " string_of_kid existentials);
   typ_debug ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints);

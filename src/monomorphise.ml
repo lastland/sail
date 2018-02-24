@@ -2670,8 +2670,7 @@ let deps_of_uvar fn_id env arg_deps = function
       when List.exists (fun k -> Kid.compare kid k == 0) env.top_kids ->
      Parents (CallerKidSet.singleton (fn_id,kid))
   | U_nexp nexp -> InFun (deps_of_nexp env.kid_deps arg_deps nexp)
-  | U_order _
-  | U_effect _ -> InFun dempty
+  | U_order _ -> InFun dempty
   | U_typ typ -> InFun (deps_of_typ env.kid_deps arg_deps typ)
 
 let mk_subrange_pattern vannot vstart vend =
