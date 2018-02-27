@@ -60,7 +60,12 @@ val addrWrapper : (bits(64), MemAccessType, WordType) -> bits(64)
 function addrWrapper(addr, accessType, width) =
     addr
 
+$ifdef _MIPS_TLB_STUB
+val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape}
+$else
 val TranslatePC : bits(64) -> bits(64) effect {rreg, wreg, escape, undef}
+$endif
+
 function TranslatePC (vAddr) = {
     incrementCP0Count();
     if (vAddr[1..0] != 0b00) then /* bad PC alignment */
@@ -72,7 +77,7 @@ function TranslatePC (vAddr) = {
 let have_cp2 = false
 
 
-function SignalException (ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
+
 
 val ERETHook : unit -> unit
 function ERETHook() = ()

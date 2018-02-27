@@ -324,14 +324,34 @@ function wGPR (idx, v) = {
          if i == 0 then () else GPR[i] = v
 }
 
-val MEMr         : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
-val MEMr_reserve : forall 'n. ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
-val MEM_sync     : unit -> unit effect { barr }
+val MEMr = {lem: "MEMr"} : forall 'n.
+  ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
+val MEMr_reserve = {lem: "MEMr_reserve"} : forall 'n.
+  ( bits(64) , atom('n) ) -> (bits(8 * 'n)) effect { rmem }
+val MEM_sync = {lem: "MEM_sync"} :
+  unit -> unit effect { barr }
 
-val MEMea              : forall 'n. ( bits(64) , atom('n)) -> unit effect { eamem }
-val MEMea_conditional  : forall 'n. ( bits(64) , atom('n)) -> unit effect { eamem }
-val MEMval             : forall 'n. ( bits(64) , atom('n), bits(8*'n)) -> unit effect { wmv }
-val MEMval_conditional : forall 'n. ( bits(64) , atom('n), bits(8*'n)) -> bool effect { wmv }
+val MEMea = {lem: "MEMea"} : forall 'n.
+  ( bits(64) , atom('n)) -> unit effect { eamem }
+val MEMea_conditional = {lem: "MEMea_conditional"} : forall 'n.
+  ( bits(64) , atom('n)) -> unit effect { eamem }
+val MEMval = {lem: "MEMval"} : forall 'n.
+  ( bits(64) , atom('n), bits(8*'n)) -> unit effect { wmv }
+val MEMval_conditional = {lem: "MEMval_conditional"} : forall 'n.
+  ( bits(64) , atom('n), bits(8*'n)) -> bool effect { wmv }
+
+/* Extern nops with effects, sometimes useful for faking effect */
+val skip_eamem = "skip" : unit -> unit effect {eamem}
+val skip_barr = "skip" : unit -> unit effect {barr}
+
+function MEMr (addr, size) = __MIPS_read(addr, size)
+function MEMr_reserve (addr, size) = __MIPS_read(addr, size)
+function MEM_sync () = skip_barr()
+
+function MEMea (addr, size) = skip_eamem()
+function MEMea_conditional (addr, size) = skip_eamem()
+function MEMval (addr, size, data) = __MIPS_write(addr, size, data)
+function MEMval_conditional (addr, size, data) = { __MIPS_write(addr, size, data); true }
 
 enum Exception =
 {
@@ -403,10 +423,11 @@ function SignalExceptionMIPS (ex, kccBase) =
       nextPC = vectorBase + EXTS(vectorOffset) - kccBase;
       CP0Cause->ExcCode() = ExceptionCode(ex);
       CP0Status->EXL()    = 0b1;
-      exit (());
+      throw (ISAException);
   }
 
 val SignalException : forall ('o : Type) . Exception -> 'o effect {escape, rreg, wreg}
+function SignalException (ex) = SignalExceptionMIPS(ex, 0x0000000000000000)
 
 val SignalExceptionBadAddr : forall ('o : Type) . (Exception, bits(64)) -> 'o effect {escape, rreg, wreg}
 function  SignalExceptionBadAddr(ex, badAddr) =

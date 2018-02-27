@@ -60,6 +60,10 @@ let opt_ddump_flow_graphs = ref false
 
 (* Optimization flags *)
 let optimize_primops = ref false
+let optimize_hoist_allocations = ref false
+let optimize_struct_undefined = ref false
+let optimize_struct_updates = ref false
+let optimize_enum_undefined = ref false
 
 let c_debug str =
   if !c_verbosity > 0 then prerr_endline str else ()
@@ -82,6 +86,8 @@ let rec string_of_fragment ?zencode:(zencode=true) = function
   | F_id id when zencode -> Util.zencode_string (string_of_id id)
   | F_id id -> string_of_id id
   | F_lit str -> str
+  | F_call (str, frags) ->
+     Printf.sprintf "%s(%s)" str (Util.string_of_list ", " (string_of_fragment ~zencode:zencode) frags)
   | F_field (f, field) ->
      Printf.sprintf "%s.%s" (string_of_fragment' ~zencode:zencode f) field
   | F_op (f1, op, f2) ->
@@ -172,6 +178,7 @@ let rec frag_rename from_id to_id = function
   | F_lit str -> F_lit str
   | F_have_exception -> F_have_exception
   | F_current_exception -> F_current_exception
+  | F_call (call, frags) -> F_call (call, List.map (frag_rename from_id to_id) frags)
   | F_op (f1, op, f2) -> F_op (frag_rename from_id to_id f1, op, frag_rename from_id to_id f2)
   | F_unary (op, f) -> F_unary (op, frag_rename from_id to_id f)
   | F_field (f, field) -> F_field (frag_rename from_id to_id f, field)
@@ -390,7 +397,10 @@ let rec pp_aexp = function
      pp_annot typ (separate space [string "match"; pp_aval aval; pp_cases cases])
   | AE_try (aexp, cases, typ) ->
      pp_annot typ (separate space [string "try"; pp_aexp aexp; pp_cases cases])
-  | AE_record_update (_, _, typ) -> pp_annot typ (string "RECORD UPDATE")
+  | AE_record_update (aval, updates, typ) ->
+     braces (pp_aval aval ^^ string " with "
+             ^^ separate (string ", ") (List.map (fun (id, aval) -> pp_id id ^^ string " = " ^^ pp_aval aval)
+                                                 (Bindings.bindings updates)))
 
 and pp_apat = function
   | AP_wild -> string "_"
@@ -894,7 +904,7 @@ let analyze_primop' ctx id args typ =
   let no_change = AE_app (id, args, typ) in
   let args = List.map (c_aval ctx) args in
   let extern = if Env.is_extern id ctx.tc_env "c" then Env.get_extern id ctx.tc_env "c" else failwith "Not extern" in
-  prerr_endline ("Analysing: " ^ extern ^ Pretty_print_sail.to_string (separate_map (string ", ") pp_aval args));
+  (* prerr_endline ("Analysing: " ^ string_of_typ typ ^ " " ^ extern ^ Pretty_print_sail.to_string (separate_map (string ", ") pp_aval args)); *)
 
   match extern, args with
   | "eq_bits", [AV_C_fragment (v1, typ1); AV_C_fragment (v2, typ2)] ->
@@ -910,11 +920,39 @@ let analyze_primop' ctx id args typ =
   | "eq_bit", [AV_C_fragment (a, _); AV_C_fragment (b, _)] ->
      AE_val (AV_C_fragment (F_op (a, "==", b), typ))
 
+  | "slice", [AV_C_fragment (vec, _); AV_C_fragment (start, _); AV_C_fragment (len, _)] ->
+     AE_val (AV_C_fragment (F_op (F_op (F_op (F_lit "1L", "<<", len), "-", F_lit "1L"), "&", F_op (vec, ">>", start)), typ))
+
   | "undefined_bit", _ ->
      AE_val (AV_C_fragment (F_lit "0ul", typ))
 
-  | "undefined_bv_t", _ ->
-     AE_val (AV_C_fragment (F_lit "0ul", typ))
+  | "undefined_vector", [AV_C_fragment (len, _); _] ->
+     begin match destruct_vector ctx.tc_env typ with
+     | Some (Nexp_aux (Nexp_constant n, _), _, Typ_aux (Typ_id id, _))
+          when string_of_id id = "bit" && Big_int.less_equal n (Big_int.of_int 64) ->
+       AE_val (AV_C_fragment (F_lit "0ul", typ))
+     | _ -> no_change
+     end
+
+  | "sail_uint", [AV_C_fragment (frag, vtyp)] ->
+     begin match destruct_vector ctx.tc_env vtyp with
+     | Some (Nexp_aux (Nexp_constant n, _), _, _)
+          when Big_int.less_equal n (Big_int.of_int 63) && is_stack_typ ctx typ ->
+        prerr_endline "Optimizing uint"; (* TODO: Not sure this ever fires *)
+        AE_val (AV_C_fragment (frag, typ))
+     | _ -> no_change
+     end
+
+  | "replicate_bits", [AV_C_fragment (vec, vtyp); AV_C_fragment (times, _)] ->
+     begin match destruct_vector ctx.tc_env typ, destruct_vector ctx.tc_env vtyp with
+     | Some (Nexp_aux (Nexp_constant n, _), _, _), Some (Nexp_aux (Nexp_constant m, _), _, _)
+          when Big_int.less_equal n (Big_int.of_int 64) ->
+        AE_val (AV_C_fragment (F_call ("fast_replicate_bits", [F_lit (Big_int.to_string m); vec; times]), typ))
+     | _ -> no_change
+     end
+
+  | "undefined_bool", _ ->
+     AE_val (AV_C_fragment (F_lit "false", typ))
 
   | _, _ -> no_change
 
@@ -1005,7 +1043,7 @@ let cval_ctyp = function (_, ctyp) -> ctyp
 
 let rec map_instrs f (I_aux (instr, aux)) =
   let instr = match instr with
-    | I_decl _ | I_alloc _ | I_init _ -> instr
+    | I_decl _ | I_alloc _ | I_init _ | I_reset _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, f (List.map (map_instrs f) instrs1), f (List.map (map_instrs f) instrs2), ctyp)
     | I_funcall _ | I_convert _ | I_copy _ | I_clear _ | I_jump _ | I_throw _ | I_return _ -> instr
@@ -1015,10 +1053,12 @@ let rec map_instrs f (I_aux (instr, aux)) =
   in
   I_aux (instr, aux)
 
+let cval_rename from_id to_id (frag, ctyp) = (frag_rename from_id to_id frag, ctyp)
+
 let rec instr_ctyps (I_aux (instr, aux)) =
   match instr with
-  | I_decl (ctyp, _) | I_alloc (ctyp, _) | I_clear (ctyp, _) -> [ctyp]
-  | I_init (ctyp, _, cval) -> [ctyp; cval_ctyp cval]
+  | I_decl (ctyp, _) | I_alloc (ctyp, _) | I_reset (ctyp, _) | I_clear (ctyp, _) -> [ctyp]
+  | I_init (ctyp, _, cval) | I_reinit (ctyp, _, cval) -> [ctyp; cval_ctyp cval]
   | I_if (cval, instrs1, instrs2, ctyp) ->
      ctyp :: cval_ctyp cval :: List.concat (List.map instr_ctyps instrs1 @ List.map instr_ctyps instrs2)
   | I_funcall (_, _, cvals, ctyp) ->
@@ -1056,6 +1096,7 @@ let cdef_ctyps ctx = function
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
      ret_ctyp :: arg_ctyps @ List.concat (List.map instr_ctyps instrs)
 
+  | CDEF_startup (id, instrs) | CDEF_finish (id, instrs) -> List.concat (List.map instr_ctyps instrs)
   | CDEF_type tdef -> ctype_def_ctyps tdef
   | CDEF_let (_, bindings, instrs, cleanup) ->
      List.map snd bindings
@@ -1103,8 +1144,12 @@ let rec pp_instr ?short:(short=false) (I_aux (instr, aux)) =
      pp_keyword "try" ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
   | I_alloc (ctyp, id) ->
      pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
+  | I_reset (ctyp, id) ->
+     pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp
   | I_init (ctyp, id, cval) ->
      pp_keyword "create" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
+  | I_reinit (ctyp, id, cval) ->
+     pp_keyword "recreate" ^^ pp_id id ^^ string " : " ^^ pp_ctyp ctyp ^^ string " = " ^^ pp_cval cval
   | I_funcall (x, f, args, ctyp2) ->
      separate space [ pp_clexp x; string "=";
                       string (string_of_id f |> Util.green |> Util.clear) ^^ parens (separate_map (string ", ") pp_cval args);
@@ -1164,6 +1209,14 @@ let pp_cdef = function
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace ^^ space
      ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr cleanup) rbrace ^^ space
      ^^ hardline
+  | CDEF_startup (id, instrs)->
+     pp_keyword "startup" ^^ pp_id id ^^ space
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
+     ^^ hardline
+  | CDEF_finish (id, instrs)->
+     pp_keyword "finish" ^^ pp_id id ^^ space
+     ^^ surround 2 0 lbrace (separate_map (semi ^^ hardline) pp_instr instrs) rbrace
+     ^^ hardline
 
 let is_ct_enum = function
   | CT_enum _ -> true
@@ -1183,6 +1236,10 @@ let is_ct_list = function
 
 let is_ct_vector = function
   | CT_vector _ -> true
+  | _ -> false
+
+let is_ct_struct = function
+  | CT_struct _ -> true
   | _ -> false
 
 let rec chunkify n xs =
@@ -1305,6 +1362,7 @@ let rec compile_aval ctx = function
      let direction = match ord with
        | Ord_aux (Ord_inc, _) -> false
        | Ord_aux (Ord_dec, _) -> true
+       | Ord_aux (Ord_var _, _) -> c_error "Polymorphic vector direction found"
      in
      let gs = gensym () in
      let ctyp = CT_uint64 (len, direction) in
@@ -1624,6 +1682,21 @@ let rec compile_aexp ctx = function
      (fun clexp -> icopy clexp (F_id gs, CT_bool)),
      []
 
+  (* This is a faster assignment rule for updating fields of a
+     struct. Turned on by !optimize_struct_updates. *)
+  | AE_assign (id, assign_typ, AE_record_update (AV_id (rid, _), fields, typ))
+       when Id.compare id rid = 0 && !optimize_struct_updates ->
+     let compile_fields (field_id, aval) =
+       let field_setup, cval, field_cleanup = compile_aval ctx aval in
+       field_setup
+       @ [icopy (CL_field (id, string_of_id field_id)) cval]
+       @ field_cleanup
+     in
+     List.concat (List.map compile_fields (Bindings.bindings fields)),
+     CT_unit,
+     (fun clexp -> icopy clexp unit_fragment),
+     []
+
   | AE_assign (id, assign_typ, aexp) ->
      (* assign_ctyp is the type of the C variable we are assigning to,
         ctyp is the type of the C expression being assigned. These may
@@ -1743,7 +1816,6 @@ and compile_block ctx = function
 
 (* FIXME: this function is a bit of a hack *)
 let rec pat_ids (Typ_aux (arg_typ_aux, _) as arg_typ) (P_aux (p_aux, (l, _)) as pat) =
-  prerr_endline (string_of_typ arg_typ);
   match p_aux, arg_typ_aux with
   | P_id id, _ -> [id]
   | P_tup pats, Typ_tup arg_typs when List.length pats = List.length arg_typs ->
@@ -1823,9 +1895,7 @@ let generate_cleanup instrs =
    into code that sets that pointer, as well as adds extra control
    flow to cleanup heap-allocated variables correctly when a function
    terminates early. See the generate_cleanup function for how this is
-   done. FIXME: could be some memory leaks introduced here, do we do
-   the right thing with generate_cleanup and multiple returns in the
-   same block? *)
+   done. *)
 let fix_early_return ret ctx instrs =
   let end_function_label = label "end_function_" in
   let is_return_recur (I_aux (instr, _)) =
@@ -1862,6 +1932,37 @@ let fix_early_return ret ctx instrs =
   in
   rewrite_return [] instrs
   @ [ilabel end_function_label]
+
+(* This is like fix_early_return, but for stack allocated returns. *)
+let fix_early_stack_return ctx instrs =
+  let is_return_recur (I_aux (instr, _)) =
+    match instr with
+    | I_return _ | I_if _ | I_block _ -> true
+    | _ -> false
+  in
+  let rec rewrite_return historic instrs =
+    match instr_split_at is_return_recur instrs with
+    | instrs, [] -> instrs
+    | before, I_aux (I_block instrs, _) :: after ->
+       before
+       @ [iblock (rewrite_return (generate_cleanup (historic @ before)) instrs)]
+       @ rewrite_return (historic @ before) after
+    | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), _) :: after ->
+       let historic = historic @ before in
+       before
+       @ [iif cval (rewrite_return historic then_instrs) (rewrite_return historic else_instrs) ctyp]
+       @ rewrite_return historic after
+    | before, (I_aux (I_return cval, _) as ret) :: after ->
+       let cleanup_label = label "cleanup_" in
+       let end_cleanup_label = label "end_cleanup_" in
+       before
+       @ generate_cleanup (historic @ before)
+       @ [ret]
+       (* There could be jumps into here *)
+       @ rewrite_return (historic @ before) after
+    | _, _ -> assert false
+  in
+  rewrite_return [] instrs
 
 let fix_exception_block ctx instrs =
   let end_block_label = label "end_block_exception_" in
@@ -1913,7 +2014,7 @@ let fix_exception_block ctx instrs =
 
 let rec map_try_block f (I_aux (instr, aux)) =
   let instr = match instr with
-    | I_decl _ | I_alloc _ | I_init _ -> instr
+    | I_decl _ | I_alloc _ | I_reset _ | I_init _ | I_reinit _ -> instr
     | I_if (cval, instrs1, instrs2, ctyp) ->
        I_if (cval, List.map (map_try_block f) instrs1, List.map (map_try_block f) instrs2, ctyp)
     | I_funcall _ | I_convert _ | I_copy _ | I_clear _ | I_throw _ | I_return _ -> instr
@@ -1947,7 +2048,7 @@ let compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
-     if string_of_id id = "test" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
+     if string_of_id id = "main" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let gs = gensym () in
      let pat = match pat with
@@ -1959,9 +2060,9 @@ let compile_def ctx = function
        | Typ_fn (arg_typ, ret_typ, _) -> arg_typ, ret_typ
        | _ -> assert false
      in
-     prerr_endline (string_of_id id ^ " : " ^ string_of_ctyp ctyp);
      if is_stack_ctyp ctyp then
        let instrs = [idecl ctyp gs] @ setup @ [call (CL_id gs)] @ cleanup @ [ireturn (F_id gs, ctyp)] in
+       let instrs = fix_early_stack_return ctx instrs in
        let instrs = fix_exception ctx instrs in
        [CDEF_fundef (id, None, pat_ids arg_typ pat, instrs)], ctx
      else
@@ -2095,6 +2196,7 @@ let rec fragment_deps = function
   | F_id id -> NS.singleton (G_id id)
   | F_lit _ -> NS.empty
   | F_field (frag, _) | F_unary (_, frag) -> fragment_deps frag
+  | F_call (_, frags) -> List.fold_left NS.union NS.empty (List.map fragment_deps frags)
   | F_op (frag1, _, frag2) -> NS.union (fragment_deps frag1) (fragment_deps frag2)
   | F_current_exception -> NS.empty
   | F_have_exception -> NS.empty
@@ -2112,8 +2214,8 @@ let rec clexp_deps = function
    instruction **)
 let instr_deps = function
   | I_decl (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_alloc (ctyp, id) -> NS.empty, NS.singleton (G_id id)
-  | I_init (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
+  | I_alloc (ctyp, id) | I_reset (ctyp, id) -> NS.empty, NS.singleton (G_id id)
+  | I_init (ctyp, id, cval) | I_reinit (ctyp, id, cval) -> cval_deps cval, NS.singleton (G_id id)
   | I_if (cval, _, _, _) -> cval_deps cval, NS.empty
   | I_jump (cval, label) -> cval_deps cval, NS.singleton (G_label label)
   | I_funcall (clexp, _, cvals, _) -> List.fold_left NS.union NS.empty (List.map cval_deps cvals), clexp_deps clexp
@@ -2226,7 +2328,122 @@ let make_dot id graph =
   close_out out_chan
 
 (**************************************************************************)
-(* 6. Code generation                                                     *)
+(* 6. Optimizations                                                       *)
+(**************************************************************************)
+
+let clexp_rename from_id to_id =
+  let rename id = if Id.compare id from_id = 0 then to_id else id in
+  function
+  | CL_id id -> CL_id (rename id)
+  | CL_field (id, field) -> CL_field (rename id, field)
+  | CL_addr id -> CL_addr (rename id)
+  | CL_current_exception -> CL_current_exception
+  | CL_have_exception -> CL_have_exception
+
+let rec instrs_rename from_id to_id =
+  let rename id = if Id.compare id from_id = 0 then to_id else id in
+  let crename = cval_rename from_id to_id in
+  let irename instrs = instrs_rename from_id to_id instrs in
+  let lrename = clexp_rename from_id to_id in
+  function
+  | (I_aux (I_decl (ctyp, new_id), _) :: _) as instrs when Id.compare from_id new_id = 0 -> instrs
+  | I_aux (I_decl (ctyp, new_id), aux) :: instrs -> I_aux (I_decl (ctyp, new_id), aux) :: irename instrs
+  | I_aux (I_alloc (ctyp, id), aux) :: instrs -> I_aux (I_alloc (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_reset (ctyp, id), aux) :: instrs -> I_aux (I_reset (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_init (ctyp, id, cval), aux) :: instrs -> I_aux (I_init (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_reinit (ctyp, id, cval), aux) :: instrs -> I_aux (I_reinit (ctyp, rename id, crename cval), aux) :: irename instrs
+  | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+     I_aux (I_if (crename cval, irename then_instrs, irename else_instrs, ctyp), aux) :: irename instrs
+  | I_aux (I_jump (cval, label), aux) :: instrs -> I_aux (I_jump (crename cval, label), aux) :: irename instrs
+  | I_aux (I_funcall (clexp, id, cvals, ctyp), aux) :: instrs ->
+     I_aux (I_funcall (lrename clexp, rename id, List.map crename cvals, ctyp), aux) :: irename instrs
+  | I_aux (I_copy (clexp, cval), aux) :: instrs -> I_aux (I_copy (lrename clexp, crename cval), aux) :: irename instrs
+  | I_aux (I_convert (clexp, ctyp1, id, ctyp2), aux) :: instrs ->
+     I_aux (I_convert (lrename clexp, ctyp1, rename id, ctyp2), aux) :: irename instrs
+  | I_aux (I_clear (ctyp, id), aux) :: instrs -> I_aux (I_clear (ctyp, rename id), aux) :: irename instrs
+  | I_aux (I_return cval, aux) :: instrs -> I_aux (I_return (crename cval), aux) :: irename instrs
+  | I_aux (I_block block, aux) :: instrs -> I_aux (I_block (irename block), aux) :: irename instrs
+  | I_aux (I_try_block block, aux) :: instrs -> I_aux (I_try_block (irename block), aux) :: irename instrs
+  | I_aux (I_throw cval, aux) :: instrs -> I_aux (I_throw (crename cval), aux) :: irename instrs
+  | (I_aux ((I_comment _ | I_raw _ | I_label _ | I_goto _ | I_match_failure), _) as instr) :: instrs -> instr :: irename instrs
+  | [] -> []
+
+let hoist_ctyp = function
+  | CT_mpz | CT_bv _ | CT_struct _ -> true
+  | _ -> false
+
+let hoist_counter = ref 0
+
+let hoist_id () =
+  let id = mk_id ("gh#" ^ string_of_int !gensym_counter) in
+  incr gensym_counter;
+  id
+
+let hoist_allocations ctx = function
+  | CDEF_fundef (function_id, heap_return, args, body) ->
+     let decls = ref [] in
+     let cleanups = ref [] in
+     let rec hoist = function
+       | (I_aux (I_decl (ctyp, decl_id), _) as decl) :: instrs when hoist_ctyp ctyp ->
+          let hid = hoist_id () in
+          let hoist_stop (I_aux (instr, _)) =
+            match instr with
+            | I_if _ | I_block _ | I_try_block _ | I_alloc _ | I_init _ | I_clear _ -> true
+            | _ -> false
+          in
+          let rec replace_inits instrs =
+            match instr_split_at hoist_stop instrs with
+            | before, I_aux (I_alloc (ctyp, id), aux) :: after when Id.compare id hid = 0 ->
+               before @ I_aux (I_reset (ctyp, id), aux) :: replace_inits after
+            | before, I_aux (I_init (ctyp, id, cval), aux) :: after when Id.compare id hid = 0 ->
+               before @ I_aux (I_reinit (ctyp, id, cval), aux) :: replace_inits after
+            | before, I_aux (I_clear (ctyp, id), aux) :: after when Id.compare id hid = 0 ->
+               before @ replace_inits after
+
+            | before, I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: after ->
+               before @ I_aux (I_if (cval, replace_inits then_instrs, replace_inits else_instrs, ctyp), aux) :: replace_inits after
+            | before, I_aux (I_block instrs, aux) :: after ->
+               before @ I_aux (I_block (replace_inits instrs), aux) :: replace_inits after
+            | before, I_aux (I_try_block instrs, aux) :: after ->
+               before @ I_aux (I_try_block (replace_inits instrs), aux) :: replace_inits after
+
+            | before, instr :: after -> before @ instr :: replace_inits after
+            | before, [] -> before
+          in
+          decls := ialloc ctyp hid :: idecl ctyp hid :: !decls;
+          cleanups := iclear ctyp hid :: !cleanups;
+          let instrs = replace_inits (instrs_rename decl_id hid instrs) in
+          hoist instrs
+
+       | I_aux (I_block block, aux) :: instrs ->
+          I_aux (I_block (hoist block), aux) :: hoist instrs
+       | I_aux (I_try_block block, aux) :: instrs ->
+          I_aux (I_try_block (hoist block), aux) :: hoist instrs
+       | I_aux (I_if (cval, then_instrs, else_instrs, ctyp), aux) :: instrs ->
+          I_aux (I_if (cval, hoist then_instrs, hoist else_instrs, ctyp), aux) :: hoist instrs
+
+       | instr :: instrs -> instr :: hoist instrs
+       | [] -> []
+     in
+     let body = hoist body in
+     if !decls = [] then
+       [CDEF_fundef (function_id, heap_return, args, body)]
+     else
+       [CDEF_startup (function_id, List.rev !decls);
+        CDEF_fundef (function_id, heap_return, args, body);
+        CDEF_finish (function_id, !cleanups)]
+
+  | cdef -> [cdef]
+
+let concatMap f xs = List.concat (List.map f xs)
+
+let optimize ctx cdefs =
+  let nothing cdefs = cdefs in
+  cdefs
+  |> if !optimize_hoist_allocations then concatMap (hoist_allocations ctx) else nothing
+
+(**************************************************************************)
+(* 7. Code generation                                                     *)
 (**************************************************************************)
 
 let sgen_id id = Util.zencode_string (string_of_id id)
@@ -2371,6 +2588,14 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
                             (sgen_cval_param cval))
   | I_alloc (ctyp, id) ->
      string (Printf.sprintf "  init_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
+  | I_reinit (ctyp, id, cval) ->
+     string (Printf.sprintf "  reinit_%s_of_%s(&%s, %s);"
+                            (sgen_ctyp_name ctyp)
+                            (sgen_ctyp_name (cval_ctyp cval))
+                            (sgen_id id)
+                            (sgen_cval_param cval))
+  | I_reset (ctyp, id) ->
+     string (Printf.sprintf "  reinit_%s(&%s);" (sgen_ctyp_name ctyp) (sgen_id id))
   (* FIXME: This just covers the cases we see in our specs, need a
      special conversion code-generator for full generality *)
   | I_convert (x, CT_tup ctyps1, y, CT_tup ctyps2) when List.length ctyps1 = List.length ctyps2 ->
@@ -2469,6 +2694,8 @@ let codegen_type_def ctx = function
      ^^ codegen_setter id (ctor_bindings ctors)
      ^^ twice hardline
      ^^ codegen_init "init" id (ctor_bindings ctors)
+     ^^ twice hardline
+     ^^ codegen_init "reinit" id (ctor_bindings ctors)
      ^^ twice hardline
      ^^ codegen_init "clear" id (ctor_bindings ctors)
      ^^ twice hardline
@@ -2780,6 +3007,15 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ vector_update ^^ twice hardline
     end
 
+let is_decl = function
+  | I_aux (I_decl _, _) -> true
+  | _ -> false
+
+let codegen_decl = function
+  | I_aux (I_decl (ctyp, id), _) ->
+     string (Printf.sprintf "%s %s;" (sgen_ctyp ctyp) (sgen_id id))
+  | _ -> assert false
+
 let codegen_def' ctx = function
   | CDEF_reg_dec (id, ctyp) ->
      string (Printf.sprintf "// register %s" (string_of_id id)) ^^ hardline
@@ -2815,6 +3051,18 @@ let codegen_def' ctx = function
           ^^ parens (string (sgen_ctyp ret_ctyp ^ " *" ^ sgen_id gs ^ ", ") ^^ string args)
           ^^ hardline
      in
+     let instrs =
+       if !optimize_struct_undefined && is_ct_struct ret_ctyp && Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0 then
+         []
+       else
+         instrs
+     in
+     let instrs =
+       if !optimize_enum_undefined && is_ct_enum ret_ctyp && Str.string_match (Str.regexp_string "undefined_") (string_of_id id) 0 then
+         []
+       else
+         instrs
+     in
      function_header
      ^^ string "{"
      ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) instrs) ^^ hardline
@@ -2822,6 +3070,24 @@ let codegen_def' ctx = function
 
   | CDEF_type ctype_def ->
      codegen_type_def ctx ctype_def
+
+  | CDEF_startup (id, instrs) ->
+     let startup_header = string (Printf.sprintf "void startup_%s(void)" (sgen_id id)) in
+     separate_map hardline codegen_decl (List.filter is_decl instrs)
+     ^^ twice hardline
+     ^^ startup_header ^^ hardline
+     ^^ string "{"
+     ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) (List.filter (fun i -> not (is_decl i)) instrs)) ^^ hardline
+     ^^ string "}"
+
+  | CDEF_finish (id, instrs) ->
+     let finish_header = string (Printf.sprintf "void finish_%s(void)" (sgen_id id)) in
+     separate_map hardline codegen_decl (List.filter is_decl instrs)
+     ^^ twice hardline
+     ^^ finish_header ^^ hardline
+     ^^ string "{"
+     ^^ jump 0 2 (separate_map hardline (codegen_instr id ctx) (List.filter (fun i -> not (is_decl i)) instrs)) ^^ hardline
+     ^^ string "}"
 
   | CDEF_let (number, bindings, instrs, cleanup) ->
      let instrs = add_local_labels instrs in
@@ -2854,11 +3120,29 @@ let codegen_def ctx def =
   let lists = List.map (fun ctyp -> codegen_list ctx (unlist ctyp)) lists in
   let vectors = List.filter is_ct_vector (cdef_ctyps ctx def) in
   let vectors = List.map (fun ctyp -> codegen_vector ctx (unvector ctyp)) vectors in
-  (* prerr_endline (Pretty_print_sail.to_string (pp_cdef def)); *)
+  prerr_endline (Pretty_print_sail.to_string (pp_cdef def));
   concat tups
   ^^ concat lists
   ^^ concat vectors
   ^^ codegen_def' ctx def
+
+let is_cdef_startup = function
+  | CDEF_startup _ -> true
+  | _ -> false
+
+let sgen_startup = function
+  | CDEF_startup (id, _) ->
+     Printf.sprintf "  startup_%s();" (sgen_id id)
+  | _ -> assert false
+
+let is_cdef_finish = function
+  | CDEF_startup _ -> true
+  | _ -> false
+
+let sgen_finish = function
+  | CDEF_startup (id, _) ->
+     Printf.sprintf "  finish_%s();" (sgen_id id)
+  | _ -> assert false
 
 let compile_ast ctx (Defs defs) =
   try
@@ -2867,6 +3151,7 @@ let compile_ast ctx (Defs defs) =
     let ctx = { ctx with tc_env = snd (check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
     let chunks, ctx = List.fold_left (fun (chunks, ctx) def -> let defs, ctx = compile_def ctx def in defs :: chunks, ctx) ([], ctx) defs in
     let cdefs = List.concat (List.rev chunks) in
+    let cdefs = optimize ctx cdefs in
     let docs = List.map (codegen_def ctx) cdefs in
 
     let preamble = separate hardline
@@ -2888,6 +3173,12 @@ let compile_ast ctx (Defs defs) =
     let letbind_finalizers =
       List.map (fun n -> Printf.sprintf "  kill_letbind_%d();" n) ctx.letbinds
     in
+    let startup cdefs =
+      List.map sgen_startup (List.filter is_cdef_startup cdefs)
+    in
+    let finish cdefs =
+      List.map sgen_finish (List.filter is_cdef_finish cdefs)
+    in
 
     let regs = c_ast_registers cdefs in
 
@@ -2904,12 +3195,14 @@ let compile_ast ctx (Defs defs) =
            "{";
            "  setup_library();" ]
        @ fst exn_boilerplate
+       @ startup cdefs
        @ List.concat (List.map (fun r -> fst (register_init_clear r)) regs)
        @ (if regs = [] then [] else [ "  zinitializze_registers(UNIT);" ])
        @ letbind_initializers
        @ [ "  zmain(UNIT);" ]
        @ letbind_finalizers
        @ List.concat (List.map (fun r -> snd (register_init_clear r)) regs)
+       @ finish cdefs
        @ snd exn_boilerplate
        @ [ "  cleanup_library();";
            "  return 0;";
