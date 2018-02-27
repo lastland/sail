@@ -1030,11 +1030,9 @@ let generate_undefineds vs_ids (Defs defs) =
            gen_vs (mk_id "undefined_bool") "unit -> bool effect {undef}";
            gen_vs (mk_id "undefined_bit") "unit -> bit effect {undef}";
            gen_vs (mk_id "undefined_int") "unit -> int effect {undef}";
-           gen_vs (mk_id "undefined_nat") "unit -> nat effect {undef}";
            gen_vs (mk_id "undefined_real") "unit -> real effect {undef}";
            gen_vs (mk_id "undefined_string") "unit -> string effect {undef}";
            gen_vs (mk_id "undefined_list") "forall ('a:Type). 'a -> list('a) effect {undef}";
-           gen_vs (mk_id "undefined_range") "forall 'n 'm. (atom('n), atom('m)) -> range('n,'m) effect {undef}";
            gen_vs (mk_id "undefined_vector") "forall 'n ('a:Type) ('ord : Order). (atom('n), 'a) -> vector('n, 'ord,'a) effect {undef}";
            (* Only used with lem_mwords *)
            gen_vs (mk_id "undefined_bitvector") "forall 'n. atom('n) -> vector('n, dec, bit) effect {undef}";
@@ -1099,13 +1097,14 @@ let generate_initialize_registers vs_ids (Defs defs) =
 let generate_enum_functions vs_ids (Defs defs) =
   let rec gen_enums = function
     | DEF_type (TD_aux (TD_enum (id, _, elems, _), _)) as enum :: defs ->
-       let enum_val_spec name typ =
-         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant []) typ, name, (fun _ -> None), !opt_enum_casts))
+       let enum_val_spec name quants typ =
+         mk_val_spec (VS_val_spec (mk_typschm (mk_typquant quants) typ, name, (fun _ -> None), !opt_enum_casts))
        in
-       let enum_range = range_typ (nint 0) (nint (List.length elems - 1)) in
+       let range_constraint kid = nc_and (nc_lteq (nint 0) (nvar kid)) (nc_lteq (nvar kid) (nint (List.length elems - 1))) in
 
        (* Create a function that converts a number to an enum. *)
        let to_enum =
+         let kid = mk_kid "e" in
          let name = append_id id "_of_num" in
          let pexp n id =
            let pat =
@@ -1121,15 +1120,18 @@ let generate_enum_functions vs_ids (Defs defs) =
              (mk_pat (P_id (mk_id "arg#")))
              (mk_exp (E_case (mk_exp (E_id (mk_id "arg#")), List.mapi pexp elems)))
          in
-         let range = range_typ (nint 0) (nint (List.length elems - 1)) in
          if IdSet.mem name vs_ids then []
          else
-           [ enum_val_spec name (function_typ enum_range (mk_typ (Typ_id id)) no_effect);
+           [ enum_val_spec name
+               [mk_qi_id BK_nat kid; mk_qi_nc (range_constraint kid)]
+               (function_typ (atom_typ (nvar kid)) (mk_typ (Typ_id id)) no_effect);
              mk_fundef [funcl] ]
        in
 
        (* Create a function that converts from an enum to a number. *)
        let from_enum =
+         let kid = mk_kid "e" in
+         let to_typ = mk_typ (Typ_exist ([kid], range_constraint kid, atom_typ (nvar kid))) in
          let name = prepend_id "num_of_" id in
          let pexp n id = mk_pexp (Pat_exp (mk_pat (P_id id), mk_lit_exp (L_num (Big_int.of_int n)))) in
          let funcl =
@@ -1139,22 +1141,8 @@ let generate_enum_functions vs_ids (Defs defs) =
          in
          if IdSet.mem name vs_ids then []
          else
-           [ enum_val_spec name (function_typ (mk_typ (Typ_id id)) enum_range no_effect);
+           [ enum_val_spec name [] (function_typ (mk_typ (Typ_id id)) to_typ no_effect);
              mk_fundef [funcl] ]
-         (* This is the simple way to generate this function, but the
-            rewriter and backends are all kinds of broken for function clause
-            patterns.
-         let name = prepend_id "num_of_" id in
-         let funcl n id =
-           mk_funcl name
-             (mk_pat (P_id id))
-             (mk_lit_exp (L_num (Big_int.of_int n)))
-         in
-         if IdSet.mem name vs_ids then []
-         else
-           [ enum_val_spec name (function_typ (mk_typ (Typ_id id)) enum_range no_effect);
-             mk_fundef (List.mapi funcl elems) ]
-          *)
        in
        enum :: to_enum @ from_enum @ gen_enums defs
 

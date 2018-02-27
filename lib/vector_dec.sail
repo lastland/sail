@@ -81,14 +81,15 @@ val vector_subrange = {
   ocaml: "subrange",
   lem: "subrange_vec_dec",
   c: "vector_subrange"
-} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+} : forall 'n 'm 'o, 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
 val vector_update_subrange = {
   ocaml: "update_subrange",
   lem: "update_subrange_vec_dec",
   c: "vector_update_subrange"
-} : forall 'n 'm 'o. (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
+} : forall 'n 'm 'o 'p, 'p = 'm - ('o - 1).
+  (bits('n), atom('m), atom('o), bits('p)) -> bits('n)
 
 // Some ARM specific builtins
 
@@ -106,8 +107,9 @@ val unsigned = {
   lem: "uint",
   interpreter: "uint",
   c: "sail_uint"
-} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+} : forall 'n. bits('n) -> {'m, 0 <= 'm <= 2 ^ 'n - 1. atom('m)}
 
-val signed = "sint" : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = "sint" : forall 'n.
+  bits('n) -> {'m, - (2 ^ ('n - 1)) <= 'm <= 2 ^ ('n - 1) - 1. atom('m)}
 
 $endif
