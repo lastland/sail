@@ -10,8 +10,8 @@ function test () = {
   // could still be
   let v2 as 'len2 = mk_vector ();
   let matrix as vector('width, _, 'height) = mk_square ();
-  _prove(constraint('width = 'height));
-  _prove(constraint('len = 32 | 'len = 64));
-  _prove(constraint('len2 = 32 | 'len2 = 64));
+  __prove(constraint('width = 'height));
+  __prove(constraint('len = 32 | 'len = 64));
+  __prove(constraint('len2 = 32 | 'len2 = 64));
   ()
 }

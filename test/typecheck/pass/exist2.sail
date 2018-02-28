@@ -4,7 +4,7 @@ val test : bool -> {|0, 1|}
 
 function test flag = if flag then 0 else 1
 
-let v2 : range(0, 1) = test(true)
+let v2 : {|0, 1|} = test(true)
 
 val add : forall 'a 'b. (atom('a), atom('b)) -> atom('a + 'b)
 
@@ -32,13 +32,8 @@ type MyInt = {'n, 0 = 0. atom('n)}
 
 val existential_int : int -> MyInt
 
-val existential_range : forall 'n 'm.
-  range('n, 'm) -> {'e, 'n <= 'e & 'e <= 'm. atom('e)}
-
-overload existential = {existential_int, existential_range}
+overload existential = {existential_int}
 
 let v11 : {'n, 0 = 0. atom('n)} = existential(v10)
 
-let v12 : {'e, 0 <= 'e & 'e <= 3. atom('e)} = existential(2 : range(0, 3))
-
-let v13 : MyInt = existential(v10)
+let v12 : MyInt = existential(v10)

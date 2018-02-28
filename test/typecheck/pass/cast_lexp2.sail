@@ -1,6 +1,6 @@
 val test : unit -> int
 
 function test () = {
-  y : nat = 10;
+  y : int = 10;
   y
 }

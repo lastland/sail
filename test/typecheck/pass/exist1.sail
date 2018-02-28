@@ -4,7 +4,7 @@ val test : bool -> {|0, 1|}
 
 function test flag = if flag then 0 else 1
 
-let v2 : range(0, 1) = test(true)
+let v2 : {|0, 1|} = test(true)
 
 val add : forall 'a 'b. (atom('a), atom('b)) -> atom('a + 'b)
 

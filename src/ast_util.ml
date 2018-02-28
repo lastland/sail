@@ -517,7 +517,7 @@ let string_of_base_effect_aux = function
 
 let string_of_base_kind_aux = function
   | BK_type -> "Type"
-  | BK_nat -> "Nat"
+  | BK_nat -> "Int"
   | BK_order -> "Order"
 
 let string_of_base_kind (BK_aux (bk, _)) = string_of_base_kind_aux bk
@@ -577,7 +577,7 @@ and string_of_n_constraint = function
   | NC_aux (NC_and (nc1, nc2), _) ->
      "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
-     string_of_kid kid ^ " IN {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+     string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -622,7 +622,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_block exps -> "{ " ^ string_of_list "; " string_of_exp exps ^ " }"
   | E_id v -> string_of_id v
   | E_ref id -> "ref " ^ string_of_id id
-  | E_sizeof nexp -> "sizeof " ^ string_of_nexp nexp
+  | E_sizeof nexp -> "sizeof(" ^ string_of_nexp nexp ^ ")"
   | E_constraint nc -> "constraint(" ^ string_of_n_constraint nc ^ ")"
   | E_lit lit -> string_of_lit lit
   | E_return exp -> "return " ^ string_of_exp exp
@@ -634,7 +634,7 @@ let rec string_of_exp (E_aux (exp, _)) =
   | E_try (exp, cases) ->
      "try " ^ string_of_exp exp ^ " catch { " ^ string_of_list ", " string_of_pexp cases ^ "}"
   | E_let (letbind, exp) -> "let " ^ string_of_letbind letbind ^ " in " ^ string_of_exp exp
-  | E_assign (lexp, bind) -> string_of_lexp lexp ^ " := " ^ string_of_exp bind
+  | E_assign (lexp, bind) -> string_of_lexp lexp ^ " = " ^ string_of_exp bind
   | E_cast (typ, exp) -> "(" ^ string_of_typ typ ^ ") " ^ string_of_exp exp
   | E_vector vec -> "[" ^ string_of_list ", " string_of_exp vec ^ "]"
   | E_vector_access (v, n) -> string_of_exp v ^ "[" ^ string_of_exp n ^ "]"

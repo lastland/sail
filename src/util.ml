@@ -401,6 +401,7 @@ let termcode n =
 
 let bold str = termcode 1 ^ str
 
+let gray str = termcode 90 ^ str
 let red str = termcode 91 ^ str
 let green str = termcode 92 ^ str
 let yellow str = termcode 93 ^ str

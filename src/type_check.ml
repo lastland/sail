@@ -473,7 +473,7 @@ end = struct
     | Not_found -> []
 
   let add_overloads id ids env =
-    typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]");
+    typ_print ("Adding overloads for " ^ string_of_id id ^ " [" ^ string_of_list ", " string_of_id ids ^ "]" |> Util.gray |> Util.clear);
     let existing = try Bindings.find id env.overloads with Not_found -> [] in
     { env with overloads = Bindings.add id (existing @ ids) env.overloads }
 
@@ -526,7 +526,6 @@ end = struct
     else typ_error (id_loc id) ("Could not prove " ^ string_of_list ", " string_of_n_constraint ncs ^ " for type constructor " ^ string_of_id id)
 
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
-    typ_debug ("Expanding synonyms for " ^ string_of_typ t);
     match typ with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
     | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
@@ -738,7 +737,7 @@ end = struct
   let update_val_spec id (typq, typ) env =
     begin
       let typ = expand_synonyms env typ in
-      typ_print ("Adding val spec binding " ^ string_of_id id ^ " :: " ^ string_of_bind (typq, typ));
+      typ_print (("Adding val spec binding " |> Util.gray |> Util.clear) ^ string_of_id id ^ " :: " ^ string_of_bind (typq, typ));
       { env with top_val_specs = Bindings.add id (typq, canonicalize env typ) env.top_val_specs }
     end
 
@@ -761,7 +760,7 @@ end = struct
     then typ_error (id_loc id) ("Cannot create enum " ^ string_of_id id ^ ", type name is already bound")
     else
       begin
-        typ_print ("Adding enum " ^ string_of_id id);
+        typ_print (("Adding enum " |> Util.gray |> Util.clear) ^ string_of_id id);
         { env with enums = Bindings.add id (IdSet.of_list ids) env.enums }
       end
 
@@ -824,7 +823,7 @@ end = struct
 
   let string_of_mtyp (mut, typ) = match mut with
     | Immutable -> string_of_typ typ
-    | Mutable -> "ref<" ^ string_of_typ typ ^ ">"
+    | Mutable -> "mutable " ^ string_of_typ typ
 
   let add_local id mtyp env =
     begin
@@ -832,7 +831,7 @@ end = struct
       if Bindings.mem id env.top_val_specs then
         typ_error (id_loc id) ("Local variable " ^ string_of_id id ^ " is already bound as a function name")
       else ();
-      typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp);
+      typ_print ("Adding local binding " ^ string_of_id id ^ " :: " ^ string_of_mtyp mtyp |> Util.gray |> Util.clear);
       { env with locals = Bindings.add id mtyp env.locals }
     end
 
@@ -889,7 +888,7 @@ end = struct
     then typ_error (id_loc id) ("Register " ^ string_of_id id ^ " is already bound")
     else
       begin
-        typ_print ("Adding register binding " ^ string_of_id id ^ " :: " ^ string_of_typ typ);
+        typ_print (("Adding register binding " |> Util.gray |> Util.clear) ^ string_of_id id ^ " :: " ^ string_of_typ typ);
         { env with registers = Bindings.add id (canonicalize env typ) env.registers }
       end
 
@@ -926,7 +925,7 @@ end = struct
     then typ_error (kid_loc kid) ("Kind identifier " ^ string_of_kid kid ^ " is already bound")
     else
       begin
-        typ_print ("Adding kind identifier " ^ string_of_kid kid ^ " :: " ^ string_of_base_kind_aux k);
+        typ_print ("Adding kind identifier " ^ string_of_kid kid ^ " : " ^ string_of_base_kind_aux k |> Util.gray |> Util.clear);
         { env with typ_vars = KBindings.add kid k env.typ_vars }
       end
 
@@ -948,7 +947,7 @@ end = struct
   let add_constraint (NC_aux (_, l) as constr) env =
     wf_constraint env constr;
     begin
-      typ_print ("Adding constraint " ^ string_of_n_constraint constr);
+      typ_print ("Adding constraint " ^ string_of_n_constraint constr |> Util.gray |> Util.clear);
       { env with constraints = constr :: env.constraints }
     end
 
@@ -970,7 +969,7 @@ end = struct
     then typ_error (id_loc id) ("Type synonym " ^ string_of_id id ^ " already exists")
     else
       begin
-        typ_print ("Adding type synonym " ^ string_of_id id);
+        typ_print (("Adding type synonym " |> Util.gray |> Util.clear) ^ string_of_id id);
         { env with typ_synonyms = Bindings.add id synonym env.typ_synonyms }
       end
 
@@ -1410,7 +1409,7 @@ let merge_unifiers l kid uvar1 uvar2 =
   | None, None -> None
 
 let rec unify l env typ1 typ2 =
-  typ_print ("Unify " ^ string_of_typ typ1 ^ " with " ^ string_of_typ typ2);
+  typ_print (("Unify " |> Util.yellow |> Util.clear) ^ string_of_typ typ1 ^ " with " ^ string_of_typ typ2);
   assert (Env.is_canonical env typ1 && Env.is_canonical env typ2);
   let goals = KidSet.inter (KidSet.diff (typ_frees typ1) (typ_frees typ2)) (typ_frees typ1) in
 
@@ -1480,8 +1479,8 @@ let rec unify l env typ1 typ2 =
      typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
      unifiers, kids, Some nc
   | None ->
-   let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
-   unify_typ l typ1 typ2, [], None
+     let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
+     unify_typ l typ1 typ2, [], None
 
 let merge_uvars l unifiers1 unifiers2 =
   try KBindings.merge (merge_unifiers l) unifiers1 unifiers2
@@ -1563,8 +1562,9 @@ let rec alpha_equivalent env typ1 typ2 =
       | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kids, nc, typ) ->
-         let (kids, _) = kid_order (KidSet.of_list kids) typ in
-         let kids = List.map (fun kid -> (kid, new_kid ())) kids in
+         let (kids, kids') = kid_order (KidSet.of_list kids) typ in
+         (* FIXME: order kids' based of appearance in constraint *)
+         let kids = List.map (fun kid -> (kid, new_kid ())) (kids @ KidSet.elements kids') in
          let nc = List.fold_left (fun nc (kid, nk) -> nc_subst_nexp kid (Nexp_var nk) nc) nc kids in
          let typ = List.fold_left (fun nc (kid, nk) -> typ_subst_nexp kid (Nexp_var nk) nc) typ kids in
          let kids = List.map snd kids in
@@ -1588,7 +1588,7 @@ let rec alpha_equivalent env typ1 typ2 =
   else (typ_debug "Not alpha-equivalent"; false)
 
 let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as typ2) =
-  typ_print ("Subtype " ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
+  typ_print (("Subtype " |> Util.green |> Util.clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
   match typ_aux1, typ_aux2 with
   | Typ_tup typs1, Typ_tup typs2 when List.length typs1 = List.length typs2 ->
      List.iter2 (subtyp l env) typs1 typs2
@@ -1614,20 +1614,25 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
      let env = add_existential kids nc env in subtyp l env typ1 typ2
   | None, (kids, nc, typ2) ->
      let env = add_typ_vars kids env in
+     let kids' = KidSet.elements (KidSet.diff (KidSet.of_list kids) (typ_frees typ2)) in
      let unifiers, existential_kids, existential_nc =
        try unify l env typ2 typ1 with
        | Unification_error (_, m) -> typ_error l m
      in
      let nc = List.fold_left (fun nc (kid, uvar) -> nc_subst_uvar kid uvar nc) nc (KBindings.bindings unifiers) in
+     let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
      let env = match existential_kids, existential_nc with
        | [], None -> env
        | _, Some enc ->
           let env = List.fold_left (fun env kid -> Env.add_typ_var kid BK_nat env) env existential_kids in
-          let env = List.fold_left uv_nexp_constraint env (KBindings.bindings unifiers) in
           Env.add_constraint enc env
        | _, None -> assert false (* Cannot have existential_kids without existential_nc *)
      in
-     if prove env nc then ()
+     let constr var_of =
+       Constraint.forall (List.map var_of kids')
+         (nc_constraint env var_of (nc_negate nc))
+     in
+     if prove_z3' env constr then ()
      else typ_error l ("Could not show " ^ string_of_typ typ1 ^ " is a subset of " ^ string_of_typ typ2)
 
 let typ_equality l env typ1 typ2 =
@@ -2072,7 +2077,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
        | (errs, (f :: fs)) -> begin
-           typ_print ("Overload: " ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
+           typ_print (("Overload: " |> Util.red |> Util.clear) ^ string_of_id f ^ "(" ^ string_of_list ", " string_of_exp xs ^ ")");
            try crule check_exp env (E_aux (E_app (f, xs), (l, ()))) typ with
            | Type_error (_, err) ->
               typ_print ("Error : " ^ string_of_type_error err);
@@ -2274,7 +2279,7 @@ and bind_pat_no_guard env (P_aux (_,(l,_)) as pat) typ =
 
 and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
   let (Typ_aux (typ_aux, _) as typ), env = bind_existential typ env in
-  typ_print ("Binding " ^ string_of_pat pat ^  " to " ^ string_of_typ typ);
+  typ_print (("Binding " |> Util.blue |> Util.clear) ^ string_of_pat pat ^  " to " ^ string_of_typ typ);
   let annot_pat pat typ = P_aux (pat, (l, Some (env, typ, no_effect))) in
   let switch_typ pat typ = match pat with
     | P_aux (pat_aux, (l, Some (env, _, eff))) -> P_aux (pat_aux, (l, Some (env, typ, eff)))

@@ -1,13 +1,6 @@
 default Order dec
 
-val vector_access = {ocaml: "access", lem: "access_vec_dec"}: forall ('n : Int).
-  (vector('n, dec, bit), int) -> bit
-
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"}: forall ('n : Int) ('m : Int) ('o : Int), 'm >= 'o & 'o >= 0 & 'n >= 'm + 1.
-  (vector('n, dec, bit), atom('m), atom('o)) -> vector('m - ('o - 1), dec, bit)
-
-val vector_update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.
-  (vector('n, dec, bit), atom('m), atom('o), vector('m - ('o - 1), dec, bit)) -> vector('n, dec, bit)
+$include <vector_dec.sail>
 
 register _FPEXC32_EL2 : vector(32, dec, bit)
 

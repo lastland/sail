@@ -1,4 +1,4 @@
-val case_test : forall ('N : Int), 'N >= 10.
-  (atom(10), range(10, 'N)) -> range(10, 'N)
+val case_test : forall ('b : Type).
+  (atom(10), 'b) -> 'b
 
 function case_test (x, y) = match (x, y) {_ => x}

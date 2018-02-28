@@ -2,11 +2,11 @@ default Order inc
 
 infix 4 ==
 
-register n : nat
+register n : int
 
-register x : nat
+register x : int
 
-register y : nat
+register y : int
 
 val eq_int = {lem: "eq"} : (int, int) -> bool
 val eq_vec = {lem: "eq_vec"} : forall ('n : Int). (vector('n, inc, bit), vector('n, inc, bit)) -> bool
@@ -18,9 +18,9 @@ val "and_bool" : (bool, bool) -> bool
 val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_inc"} : forall ('n : Int) ('m : Int) ('o : Int), 'm <= 'o <= 'n.
   (vector('n, inc, bit), atom('m), atom('o)) -> vector('o - ('m - 1), inc, bit)
 
-type wordsize = {'n, 'n in {8, 16, 32}. range(0, 'n)}
+type wordsize = {'n, 'n in {8, 16, 32}. atom('n)}
 
-let word : wordsize = 8 : range(0, 8)
+let word : wordsize = 8 : atom(8)
 
 val main : unit -> int effect {wreg, rreg}
 
@@ -41,9 +41,9 @@ function main () = {
     }
   };
   match word {
-    8 : range(0, 8) => x = 32,
-    16 : range(0, 16) => x = 64,
-    32 : range(0, 32) => x = 128
+    8 => x = 32,
+    16 => x = 64,
+    32 => x = 128
   };
   match 0b010101 {
     0b01 @ _ : vector(1, inc, bit) @ 0b101 => n = 42,

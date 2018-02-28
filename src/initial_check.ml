@@ -946,7 +946,6 @@ let to_ast (default_names : Nameset.t) (kind_env : kind Envmap.t) (def_ord : ord
 let initial_kind_env =
   Envmap.from_list [
     ("bool", {k = K_Typ});
-    ("nat", {k = K_Typ});
     ("int", {k = K_Typ});
     ("uint8", {k = K_Typ});
     ("uint16", {k= K_Typ});
@@ -960,7 +959,6 @@ let initial_kind_env =
     ("reg", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("register", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
     ("ref", {k = K_Lam( [{k = K_Typ}], {k= K_Typ})});
-    ("range", {k = K_Lam( [ {k = K_Nat}; {k= K_Nat}], {k = K_Typ}) });
     ("vector", {k = K_Lam( [{k = K_Nat}; {k= K_Ord} ; {k=K_Typ}], {k=K_Typ}) } );
     ("atom", {k = K_Lam( [ {k=K_Nat} ], {k=K_Typ})});
     ("option", { k = K_Lam( [{k=K_Typ}], {k=K_Typ}) });
