@@ -108,69 +108,64 @@ let rec read_lines in_chan = function
 
 let termcode n = "\x1B[" ^ string_of_int n ^ "m"
 
-let print_code1 ff fname lnum1 cnum1 cnum2 =
+let print_code1 ?color:(color=Util.background_red) ff fname lnum1 cnum1 cnum2 =
   try
     let in_chan = open_in fname in
     begin
       try
         skip_lines in_chan (lnum1 - 1);
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s%s"
+        Format.fprintf ff "%s%s%s"
                        (Str.string_before line cnum1)
-                       (termcode 41)
-                       (Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1))
-                       (termcode 49)
+                       (Str.string_before (Str.string_after line cnum1) (cnum2 - cnum1) |> color |> Util.clear)
                        (Str.string_after line cnum2);
         close_in in_chan
       with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
     end
   with _ -> ()
 
-let format_pos ff p =
+let format_pos ?padding:(padding="\n\n") ?color:(color=Util.background_red) ff p =
   let open Lexing in
   begin
-    Format.fprintf ff "file \"%s\", line %d, character %d:\n\n"
-                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol);
-    print_code1 ff p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) (p.pos_cnum - p.pos_bol + 1);
+    Format.fprintf ff "file \"%s\", line %d, character %d%s"
+                   p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) padding;
+    print_code1 ~color:color ff p.pos_fname p.pos_lnum (p.pos_cnum - p.pos_bol) (p.pos_cnum - p.pos_bol + 1);
     Format.fprintf ff "\n\n";
     Format.pp_print_flush ff ()
   end
 
-let print_code2 ff fname lnum1 cnum1 lnum2 cnum2 =
+let print_code2 ?color:(color=Util.background_red) ff fname lnum1 cnum1 lnum2 cnum2 =
   try
     let in_chan = open_in fname in
     begin
       try
         skip_lines in_chan (lnum1 - 1);
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s\n"
+        Format.fprintf ff "%s%s\n"
                        (Str.string_before line cnum1)
-                       (termcode 41)
-                       (Str.string_after line cnum1)
-                       (termcode 49);
+                       (Str.string_after line cnum1 |> color |> Util.clear);
         let lines = read_lines in_chan (lnum2 - lnum1 - 1) in
-        List.iter (fun l -> Format.fprintf ff "%s%s%s\n" (termcode 41) l (termcode 49)) lines;
+        List.iter (fun l -> Format.fprintf ff "%s\n" (l |> color |> Util.clear)) lines;
         let line = input_line in_chan in
-        Format.fprintf ff "%s%s%s%s"
-                       (termcode 41)
-                       (Str.string_before line cnum2)
-                       (termcode 49)
+        Format.fprintf ff "%s%s"
+                       (Str.string_before line cnum2 |> color |> Util.clear)
                        (Str.string_after line cnum2);
         close_in in_chan
       with e -> (close_in_noerr in_chan; print_endline (Printexc.to_string e))
     end
   with _ -> ()
 
-let format_pos2 ff p1 p2 =
+let format_pos2 ?padding:(padding="\n\n") ?color:(color=Util.background_red) ff p1 p2 =
   let open Lexing in
   begin
-    Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d\n\n"
+    Format.fprintf ff "file \"%s\", line %d, character %d to line %d, character %d%s"
                    p1.pos_fname
                    p1.pos_lnum (p1.pos_cnum - p1.pos_bol + 1)
-                   p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
+                   p2.pos_lnum (p2.pos_cnum - p2.pos_bol)
+                   padding;
     if p1.pos_lnum == p2.pos_lnum
-    then print_code1 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol)
-    else print_code2 ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
+    then print_code1 ~color:color ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) (p2.pos_cnum - p2.pos_bol)
+    else print_code2 ~color:color ff p1.pos_fname p1.pos_lnum (p1.pos_cnum - p1.pos_bol) p2.pos_lnum (p2.pos_cnum - p2.pos_bol);
     Format.pp_print_flush ff ()
   end
 
@@ -201,22 +196,24 @@ let dest_loc (l : Parse_ast.l) : (Parse_ast.l * string list) =
   in
   aux [] l
 
-let rec format_loc_aux ff l =
+let rec format_loc_aux ?padding:(padding="\n\n") ?color:(color=Util.background_red) ff l =
   let (l_org, mod_s) = dest_loc l in
   let _ = match l_org with
-    | Parse_ast.Unknown -> Format.fprintf ff "no location information available"
-    | Parse_ast.Generated l -> Format.fprintf ff "Code generated: original nearby source is "; (format_loc_aux ff l)
-    | Parse_ast.Range(p1,p2) -> format_pos2 ff p1 p2
+    | Parse_ast.Unknown ->
+       Format.fprintf ff "No location information available"
+    | Parse_ast.Generated l ->
+       Format.fprintf ff "Code generated from "; (format_loc_aux ~padding:padding ~color:color ff l)
+    | Parse_ast.Range(p1, p2) -> format_pos2 ~padding:padding ~color:color ff p1 p2
     | Parse_ast.Int(s,_) -> Format.fprintf ff "code in lib from: %s" s
   in
   ()
 
-let format_loc_source ff l = 
-  match dest_loc l with 
-  | (Parse_ast.Range (p1, p2), _) -> 
+let format_loc_source ff l =
+  match dest_loc l with
+  | (Parse_ast.Range (p1, p2), _) ->
     begin
       let (s, multi_line) = read_from_file_pos2 p1 p2 in
-      if multi_line then 
+      if multi_line then
         Format.fprintf ff "  original input:\n%s\n" (Bytes.to_string s)
       else
         Format.fprintf ff "  original input: \"%s\"\n" (Bytes.to_string s)
@@ -229,15 +226,15 @@ let format_loc ff l =
   Format.pp_print_flush ff ()
 );;
 
-let print_err_loc l = 
+let print_err_loc l =
    (format_loc Format.err_formatter l)
 
 let print_pos p = format_pos Format.std_formatter p
 let print_err_pos p = format_pos Format.err_formatter p
 
-let loc_to_string l =
+let loc_to_string ?padding:(padding="\n\n") ?color:(color=Util.background_red) l =
   let _ = Format.flush_str_formatter () in
-  let _ = format_loc_aux Format.str_formatter l in
+  let _ = format_loc_aux Format.str_formatter ~padding:padding ~color:color l in
   let s = Format.flush_str_formatter () in
   s
 

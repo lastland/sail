@@ -537,11 +537,14 @@ let string_of_order = function
   | Ord_aux (Ord_inc, _) -> "inc"
   | Ord_aux (Ord_dec, _) -> "dec"
 
-let rec string_of_nexp = function
-  | Nexp_aux (nexp, _) -> string_of_nexp_aux nexp
-and string_of_nexp_aux = function
+let rec string_of_nexp ?colors:(colors=KBindings.empty) = function
+  | Nexp_aux (nexp, _) -> string_of_nexp_aux ~colors:colors nexp
+and string_of_nexp_aux ?colors:(colors=KBindings.empty) = function
   | Nexp_id id -> string_of_id id
-  | Nexp_var kid -> string_of_kid kid
+  | Nexp_var kid ->
+     if KBindings.mem kid colors then
+       string_of_kid kid |> KBindings.find kid colors |> Util.clear
+     else string_of_kid kid
   | Nexp_constant c -> Big_int.to_string c
   | Nexp_times (n1, n2) -> "(" ^ string_of_nexp n1 ^ " * " ^ string_of_nexp n2 ^ ")"
   | Nexp_sum (n1, n2) -> "(" ^ string_of_nexp n1 ^ " + " ^ string_of_nexp n2 ^ ")"
@@ -567,17 +570,20 @@ and string_of_typ_arg_aux = function
   | Typ_arg_nexp n -> string_of_nexp n
   | Typ_arg_typ typ -> string_of_typ typ
   | Typ_arg_order o -> string_of_order o
-and string_of_n_constraint = function
-  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp n1 ^ " = " ^ string_of_nexp n2
-  | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp n1 ^ " != " ^ string_of_nexp n2
-  | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp n1 ^ " >= " ^ string_of_nexp n2
-  | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp n1 ^ " <= " ^ string_of_nexp n2
+and string_of_n_constraint ?colors:(colors=KBindings.empty) = function
+  | NC_aux (NC_equal (n1, n2), _) -> string_of_nexp ~colors:colors n1 ^ " = " ^ string_of_nexp ~colors:colors n2
+  | NC_aux (NC_not_equal (n1, n2), _) -> string_of_nexp ~colors:colors n1 ^ " != " ^ string_of_nexp ~colors:colors n2
+  | NC_aux (NC_bounded_ge (n1, n2), _) -> string_of_nexp ~colors:colors n1 ^ " >= " ^ string_of_nexp ~colors:colors n2
+  | NC_aux (NC_bounded_le (n1, n2), _) -> string_of_nexp ~colors:colors n1 ^ " <= " ^ string_of_nexp ~colors:colors n2
   | NC_aux (NC_or (nc1, nc2), _) ->
-     "(" ^ string_of_n_constraint nc1 ^ " | " ^ string_of_n_constraint nc2 ^ ")"
+     "(" ^ string_of_n_constraint ~colors:colors nc1 ^ " | " ^ string_of_n_constraint ~colors:colors nc2 ^ ")"
   | NC_aux (NC_and (nc1, nc2), _) ->
-     "(" ^ string_of_n_constraint nc1 ^ " & " ^ string_of_n_constraint nc2 ^ ")"
+     "(" ^ string_of_n_constraint ~colors:colors nc1 ^ " & " ^ string_of_n_constraint ~colors:colors nc2 ^ ")"
   | NC_aux (NC_set (kid, ns), _) ->
-     string_of_kid kid ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
+     if KBindings.mem kid colors then
+       string_of_kid kid |> KBindings.find kid colors |> Util.clear
+     else string_of_kid kid
+     ^ " in {" ^ string_of_list ", " Big_int.to_string ns ^ "}"
   | NC_aux (NC_true, _) -> "true"
   | NC_aux (NC_false, _) -> "false"
 
@@ -586,13 +592,20 @@ let string_of_annot = function
      "Some (_, " ^ string_of_typ typ ^ ", " ^ string_of_effect eff ^ ")"
   | None -> "None"
 
-let string_of_quant_item_aux = function
-  | QI_id (KOpt_aux (KOpt_none kid, _)) -> string_of_kid kid
-  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) -> string_of_kind k ^ " " ^ string_of_kid kid
-  | QI_const constr -> string_of_n_constraint constr
+let string_of_quant_item_aux ?colors:(colors=KBindings.empty) = function
+  | QI_id (KOpt_aux (KOpt_none kid, _)) ->
+     if KBindings.mem kid colors then
+       string_of_kid kid |> KBindings.find kid colors |> Util.clear
+     else string_of_kid kid
+  | QI_id (KOpt_aux (KOpt_kind (k, kid), _)) ->
+     string_of_kind k ^ " "
+     ^ if KBindings.mem kid colors then
+         string_of_kid kid |> KBindings.find kid colors |> Util.clear
+       else string_of_kid kid
+  | QI_const constr -> string_of_n_constraint ~colors:colors constr
 
-let string_of_quant_item = function
-  | QI_aux (qi, _) -> string_of_quant_item_aux qi
+let string_of_quant_item ?colors:(colors=KBindings.empty) = function
+  | QI_aux (qi, _) -> string_of_quant_item_aux ~colors:colors qi
 
 let string_of_typquant_aux = function
   | TypQ_tq quants -> "forall " ^ string_of_list ", " string_of_quant_item quants

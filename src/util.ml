@@ -409,6 +409,9 @@ let blue str = termcode 94 ^ str
 let magenta str = termcode 95 ^ str
 let cyan str = termcode 96 ^ str
 
+let background_red str = termcode 41 ^ str
+let background_gray str = termcode 100 ^ str
+
 let clear str = str ^ termcode 0
 
 let zchar c =

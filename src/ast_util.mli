@@ -180,6 +180,10 @@ val pat_loc : 'a pat -> Parse_ast.l
 val exp_loc : 'a exp -> Parse_ast.l
 val def_loc : 'a def -> Parse_ast.l
 
+module KBindings : sig
+  include Map.S with type key = kid
+end
+
 (* For debugging and error messages only: Not guaranteed to produce
    parseable SAIL, or even print all language constructs! *)
 (* TODO: replace with existing pretty-printer *)
@@ -192,13 +196,13 @@ val string_of_kind : kind -> string
 val string_of_base_effect : base_effect -> string
 val string_of_effect : effect -> string
 val string_of_order : order -> string
-val string_of_nexp : nexp -> string
+val string_of_nexp : ?colors:((string -> string) KBindings.t) -> nexp -> string
 val string_of_typ : typ -> string
 val string_of_typ_arg : typ_arg -> string
 val string_of_typ_pat : typ_pat -> string
 val string_of_annot : ('a * typ * effect) option -> string
-val string_of_n_constraint : n_constraint -> string
-val string_of_quant_item : quant_item -> string
+val string_of_n_constraint : ?colors:((string -> string) KBindings.t) -> n_constraint -> string
+val string_of_quant_item : ?colors:((string -> string) KBindings.t) -> quant_item -> string
 val string_of_typquant : typquant -> string
 val string_of_typschm : typschm -> string
 val string_of_lit : lit -> string
@@ -260,10 +264,6 @@ module KidSet : sig
   include Set.S with type elt = kid
 end
 
-module KBindings : sig
-  include Map.S with type key = kid
-end
-
 module Bindings : sig
   include Map.S with type key = id
 end
@@ -294,6 +294,7 @@ val union_effects : effect -> effect -> effect
 
 val tyvars_of_nexp : nexp -> KidSet.t
 val tyvars_of_typ : typ -> KidSet.t
+val tyvars_of_nc : n_constraint -> KidSet.t
 val is_kid_generated : kid -> bool
 
 val undefined_of_typ : bool -> Ast.l -> (typ -> 'annot) -> typ -> 'annot exp

@@ -68,7 +68,7 @@ val opt_no_effects : bool ref
 type type_error =
   | Err_no_casts of unit exp * type_error * type_error list
   | Err_no_overloading of id * (id * type_error) list
-  | Err_unresolved_quants of id * quant_item list
+  | Err_unresolved_quants of id * typquant * quant_item list * Parse_ast.l KBindings.t * n_constraint list
   | Err_subtype of typ * typ * n_constraint list
   | Err_no_num_ident of id
   | Err_other of string
@@ -117,7 +117,7 @@ module Env : sig
 
   val get_typ_vars : t -> base_kind_aux KBindings.t
 
-  val add_typ_var : kid -> base_kind_aux -> t -> t
+  val add_typ_var : Parse_ast.l -> kid -> base_kind_aux -> t -> t
 
   val is_record : id -> t -> bool
 
@@ -176,7 +176,7 @@ end
 
 (** Push all the type variables and constraints from a typquant into
    an environment *)
-val add_typquant : typquant -> Env.t -> Env.t
+val add_typquant : Parse_ast.l -> typquant -> Env.t -> Env.t
 
 (** When the typechecker creates new type variables it gives them
    fresh names of the form 'fvXXX#name, where XXX is a number (not

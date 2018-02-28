@@ -56,13 +56,13 @@
   The main functionality is reporting errors. This is done by raising a
   [Fatal_error] exception. This is caught internally and reported via [report_error]. 
   There are several predefined types of errors which all cause different error
-  messages. If none of these fit, [Err_general] can be used.       
+  messages. If none of these fit, [Err_general] can be used.
 
 *)
 
 (** {2 Auxiliary Functions } *)
 
-val loc_to_string : Parse_ast.l -> string
+val loc_to_string : ?padding:string -> ?color:(string -> string) -> Parse_ast.l -> string
 
 (** [print_err fatal print_loc_source l head mes] prints an error / warning message to
     std-err. It starts with printing location information stored in [l]
@@ -74,7 +74,7 @@ val print_err : bool -> bool -> Parse_ast.l -> string -> string -> unit
 
 (** Errors stop execution and print a message; they typically have a location and message.
 *)
-type error = 
+type error =
   (** General errors, used for multi purpose. If you are unsure, use this one. *)
   | Err_general of Parse_ast.l * string
 
@@ -90,7 +90,7 @@ type error =
   | Err_lex of Lexing.position * string
   | Err_type of Parse_ast.l * string
   | Err_type_dual of Parse_ast.l * Parse_ast.l * string
-  
+
 exception Fatal_error of error
 
 (** [err_todo l m] is an abreviatiation for [Fatal_error (Err_todo (l, m))] *)
