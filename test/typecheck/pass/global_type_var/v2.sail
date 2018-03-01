@@ -20,4 +20,4 @@ val test2 : unit -> atom('size)
 
 function test2 () = size
 
-let _ = test(64)
+let _ = test(65)

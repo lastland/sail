@@ -11,4 +11,6 @@ val cast unsigned : forall ('n : Int).
 
 overload operator + = {add_vec, add_atom}
 
+let x : int = 3
+
 let x : {'m, 0 <= 'm <= 30. atom('m)} = 0xF + 0x2

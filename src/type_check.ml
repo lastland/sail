@@ -1214,15 +1214,14 @@ let rec nc_constraints env var_of ncs =
      Constraint.conj (nc_constraint env var_of nc) (nc_constraints env var_of ncs)
 
 let prove_z3' env constr =
-  let module Bindings = Map.Make(Kid) in
-  let bindings = ref Bindings.empty  in
+  let bindings = ref KBindings.empty  in
   let fresh_var kid =
-    let n = Bindings.cardinal !bindings in
-    bindings := Bindings.add kid n !bindings;
+    let n = KBindings.cardinal !bindings in
+    bindings := KBindings.add kid n !bindings;
     n
   in
   let var_of kid =
-    try Bindings.find kid !bindings with
+    try KBindings.find kid !bindings with
     | Not_found -> fresh_var kid
   in
   let constr = Constraint.conj (nc_constraints env var_of (Env.get_constraints env)) (constr var_of) in
@@ -1617,6 +1616,18 @@ let rec alpha_equivalent env typ1 typ2 =
   then (typ_debug "alpha-equivalent"; true)
   else (typ_debug "Not alpha-equivalent"; false)
 
+(*
+
+{'n 'm, A('n, 'm). atom('n)} <= {'n 'm, B('n 'm). atom('n)}
+
+{'n | \exist 'm. A('n, 'm)} <= {'n | \exist 'm. B('n, 'm)}
+
+\forall 'n. (\exist 'm. A('n, 'm)) --> (\exist 'm. B('n, 'm))
+\forall 'n. (\forall 'm. \not A('n, 'm)) \/ (\exist 'm. B('n, 'm))
+\forall 'n 'm. \not A('n, 'm) \/ (\exist 'm. B('n, 'm))
+
+*)
+
 let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as typ2) =
   typ_print (("Subtype " |> Util.green |> Util.clear) ^ string_of_typ typ1 ^ " and " ^ string_of_typ typ2);
   match typ_aux1, typ_aux2 with
@@ -1627,14 +1638,18 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
   (* Ensure alpha equivalent types are always subtypes of one another
      - this ensures that we can always re-check inferred types. *)
   | _, _ when alpha_equivalent env typ1 typ2 -> ()
-  (* Special case for two existentially quantified numeric (atom) types *)
+  (* Special cases for two numeric (atom) types *)
+  | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
+     let env = add_existential l kids1 nc1 env in
+     if prove env (nc_eq nexp1 nexp2) then () else typ_error l "NCNE"
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential l kids1 nc1 env in
      let env = add_typ_vars l (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))) env in
      let kids2 = KidSet.elements (KidSet.diff (KidSet.of_list kids2) (nexp_frees nexp2)) in
+     let env = Env.add_constraint (nc_eq nexp1 nexp2) env in
      let constr var_of =
        Constraint.forall (List.map var_of kids2)
-         (nc_constraint env var_of (nc_and (nc_eq nexp1 nexp2) (nc_negate nc2)))
+         (nc_constraint env var_of (nc_negate nc2))
      in
      if prove_z3' env constr then ()
      else typ_error l ("numeric subtyping failed")
@@ -2425,7 +2440,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
      annot_pat (P_lit lit) (atom_typ (nconstant n)), Env.add_constraint (nc_eq nexp (nconstant n)) env, []
   | _ ->
      let (inferred_pat, env, guards) = infer_pat env pat in
-     match subtyp l env (pat_typ_of inferred_pat) typ with
+     match subtyp l env typ (pat_typ_of inferred_pat) with
      | () -> switch_typ inferred_pat typ, env, guards
      | exception (Type_error _ as typ_exn) ->
         match pat_aux with
@@ -2433,7 +2448,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
            let var = fresh_var () in
            let guard = mk_exp (E_app_infix (mk_exp (E_id var), mk_id "==", mk_exp (E_lit lit))) in
            let (typed_pat, env, guards) = bind_pat env (mk_pat (P_id var)) typ in
-           typed_pat, env, guard::guards
+           typed_pat, env, guard :: guards
         | _ -> raise typ_exn
 
 and infer_pat env (P_aux (pat_aux, (l, ())) as pat) =
@@ -3361,12 +3376,13 @@ and propagate_lexp_effect_aux = function
 (**************************************************************************)
 
 let check_letdef orig_env (LB_aux (letbind, (l, _))) =
+  typ_print "\nChecking top-level let";
   begin
     match letbind with
-    | LB_val (P_aux (P_typ (typ_annot, pat), _), bind) ->
+    | LB_val (P_aux (P_typ (typ_annot, _), _) as pat, bind) ->
        let checked_bind = crule check_exp orig_env (strip_exp bind) typ_annot in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) typ_annot in
-       [DEF_val (LB_aux (LB_val (P_aux (P_typ (typ_annot, tpat), (l, Some (orig_env, typ_annot, no_effect))), checked_bind), (l, None)))], env
+       [DEF_val (LB_aux (LB_val (tpat, checked_bind), (l, None)))], env
     | LB_val (pat, bind) ->
        let inferred_bind = irule infer_exp orig_env (strip_exp bind) in
        let tpat, env = bind_pat_no_guard orig_env (strip_pat pat) (typ_of inferred_bind) in
@@ -3478,7 +3494,10 @@ let check_val_spec env (VS_aux (vs, (l, _))) =
   let (id, quants, typ, env) = match vs with
     | VS_val_spec (TypSchm_aux (TypSchm_ts (quants, typ), _) as typschm, id, ext_opt, is_cast) ->
        typ_debug ("VS typschm: " ^ string_of_id id ^ ", " ^ string_of_typschm typschm);
-       let env = match ext_opt "smt" with Some op -> Env.add_smt_op id op env | None -> env in
+       let env = match (ext_opt "smt", ext_opt "#") with
+         | Some op, None -> Env.add_smt_op id op env
+         | _, _ -> env
+       in
        Env.wf_typ (add_typquant l quants env) typ;
        typ_debug "CHECKED WELL-FORMED VAL SPEC";
        let env =
