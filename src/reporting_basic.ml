@@ -200,7 +200,7 @@ let rec format_loc_aux ?padding:(padding="\n\n") ?color:(color=Util.background_r
   let (l_org, mod_s) = dest_loc l in
   let _ = match l_org with
     | Parse_ast.Unknown ->
-       Format.fprintf ff "No location information available"
+       Format.fprintf ff "no location information available"
     | Parse_ast.Generated l ->
        Format.fprintf ff "Code generated from "; (format_loc_aux ~padding:padding ~color:color ff l)
     | Parse_ast.Range(p1, p2) -> format_pos2 ~padding:padding ~color:color ff p1 p2
