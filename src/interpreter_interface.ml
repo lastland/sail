@@ -76,34 +76,18 @@ module Node = struct
     | G_node (id1, _, _), G_node (id2, _, _) -> compare id1 id2
 end
 
-module NM = Map.Make(Node)
-module NS = Set.Make(Node)
+module Trace = Graph.Make(Node)
 
-type execution_graph = NS.t NM.t
+type execution_graph = Trace.t
 
-let graph = ref NM.empty
-                            
+let graph = ref Trace.empty
+
 let node_counter = ref 0
 
 let new_node color str =
   let n = G_node (!node_counter, color, str) in
   incr node_counter;
   n
-
-let add_link from_node to_node graph =
-  try
-    NM.add from_node (NS.add to_node (NM.find from_node graph)) graph
-  with
-  | Not_found -> NM.add from_node (NS.singleton to_node) graph
-
-let leaves graph =
-  List.fold_left (fun acc (from_node, to_nodes) -> NS.filter (fun to_node -> Node.compare to_node from_node != 0) (NS.union acc to_nodes))
-                 NS.empty
-                 (NM.bindings graph)
-
-(* Ensure that all leaves exist in the graph *)
-let fix_leaves graph =
-  NS.fold (fun leaf graph -> if NM.mem leaf graph then graph else NM.add leaf NS.empty graph) (leaves graph) graph
 
 let make_dot file graph =
   Util.opt_colors := false;
@@ -118,44 +102,33 @@ let make_dot file graph =
     | _, _ -> "black"
   in
   let out_chan = open_out (file ^ ".gv") in
-  output_string out_chan "digraph DEPS {\n";
-  let make_node from_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
-  in
-  let make_line from_node to_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
-  in
-  NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
-  NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
-  output_string out_chan "}\n";
-  Util.opt_colors := true;
+  Trace.visualize ~node_label:to_string ~node_color:node_color ~edge_color:edge_color out_chan file graph;
   close_out out_chan
-          
+
 let run k =
   let rec run_outcome from = function
     | Done v ->
        let node = new_node "olivedrab1" "Done" in
-       graph := add_link from node !graph;
-       
+       graph := Trace.add_edge from node !graph;
+
     | Print (str, k) ->
        let node = new_node "lightpink" str in
-       graph := add_link from node !graph;
+       graph := Trace.add_edge from node !graph;
        run_outcome node k
-                   
+
     | Undefined k ->
        let node = new_node "azure" "Choice" in
-       graph := add_link from node !graph;
+       graph := Trace.add_edge from node !graph;
        run_outcome node (k true);
        run_outcome node (k false)
-                   
+
     | Error str ->
        let node = new_node "orange1" ("Error " ^ str) in
-       graph := add_link from node !graph
-                         
+       graph := Trace.add_edge from node !graph
+
     | _ -> failwith "Unimplemented"
   in
   node_counter := 0;
   let node = new_node "peachpuff" "Start" in
   run_outcome node k;
-  fix_leaves !graph;
   make_dot "run" !graph;

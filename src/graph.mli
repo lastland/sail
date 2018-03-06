@@ -48,60 +48,46 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open import Pervasives
-open import Assert_extra
-open Map
-
-open import Sail_values
-
-type vl =
-  | V_vector of list vl
-  | V_list of list vl
-  | V_bits of list bitU
-  | V_bit of bitU
-  | V_tuple of list vl
-  | V_bool of bool
-  | V_nondet (* Special nondeterministic boolean *)
-  | V_unit
-  | V_int of integer
-  | V_string of string
-  | V_ctor of string * list vl
-  | V_ctor_kind of string
-  | V_record of list (string * vl)
-  | V_null (* Used for uninitialized values and null pointers in C compilation *)
-
-let string_of_value = function
-  | V_bits bs -> show_bitlist bs ^ "ul"
-  | V_int i -> show i ^ "l"
-  | V_bool true -> "true"
-  | V_bool false -> "false"
-  | V_null -> "NULL"
-  | V_unit -> "UNIT"
-  | V_bit B0 -> "0ul"
-  | V_bit B1 -> "1ul"
-  | V_string str -> "\"" ^ str ^ "\""
-  | _ -> failwith "Cannot convert value to string"
-end
-
-let primops extern args =
-  match (extern, args) with
-  | ("and_bool", [V_bool b1; V_bool b2]) -> V_bool (b1 && b2)
-  | ("and_bool", [V_nondet; V_bool false]) -> V_bool false
-  | ("and_bool", [V_bool false; V_nondet]) -> V_bool false
-  | ("and_bool", _) -> V_nondet
-
-  | ("or_bool", [V_bool b1; V_bool b2]) -> V_bool (b1 || b2)
-  | ("or_bool", [V_nondet; V_bool true]) -> V_bool true
-  | ("or_bool", [V_bool true; V_nondet]) -> V_bool true
-  | ("or_bool", _) -> V_nondet
-
-  | ("eq_int", [V_int n; V_int m]) -> V_bool (n = m)
-
-  | ("add_int", [V_int n; V_int m]) -> V_int (n + m)
-
-  | ("sub_int", [V_int n; V_int m]) -> V_int (n + m)
-
-  | ("choice", _) -> V_nondet
-
-  | _ -> failwith ("Unimplemented primitive operation " ^ extern)
+module type OrderedType =
+  sig
+    type t
+    val compare: t -> t -> int
   end
+
+module type S =
+  sig
+    (** The type of nodes. *)
+    type node
+
+    (** The type of graphs *)
+    type t
+
+    (** The empty graph *)
+    val empty : t
+
+    val add_edge : node -> node -> t -> t
+
+    exception Not_a_DAG of node * t;;
+
+    (** Topologically sort a graph. Throws the Not_a_DAG exception if
+       the input graph is not a directed acyclic graph. The Not_a_DAG
+       exception contains a node within the loop, and subgraph
+       containing all the paths from the node to itself. *)
+    val topsort : t -> node list
+
+    (** Visualize a graph in graphviz format. node_label should return
+       a distinct label for every node.  node_color and edge_color use
+       colors from the graphviz X11 color scheme, see:
+       https://www.graphviz.org/doc/info/colors.html. The string
+       argument is the name of the graph in the output graphviz
+       file. *)
+    val visualize : node_label:(node -> string)
+                    -> node_color:(node -> string)
+                    -> edge_color:(node -> node -> string)
+                    -> out_channel
+                    -> string
+                    -> t
+                    -> unit
+  end
+
+module Make(Ord : OrderedType) : S with type node = Ord.t

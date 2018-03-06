@@ -2223,10 +2223,8 @@ module Node = struct
     | _        , G_id _    -> -1
 end
 
-module NM = Map.Make(Node)
+module DepGraph = Graph.Make(Node)
 module NS = Set.Make(Node)
-
-type dep_graph = NS.t NM.t
 
 let rec fragment_deps = function
   | F_id id -> NS.singleton (G_id id)
@@ -2265,24 +2263,9 @@ let instr_deps = function
   | I_goto label -> NS.empty, NS.singleton (G_label label)
   | I_match_failure -> NS.empty, NS.empty
 
-let add_link from_node to_node graph =
-  try
-    NM.add from_node (NS.add to_node (NM.find from_node graph)) graph
-  with
-  | Not_found -> NM.add from_node (NS.singleton to_node) graph
-
-let leaves graph =
-  List.fold_left (fun acc (from_node, to_nodes) -> NS.filter (fun to_node -> Node.compare to_node from_node != 0) (NS.union acc to_nodes))
-                 NS.empty
-                 (NM.bindings graph)
-
-(* Ensure that all leaves exist in the graph *)
-let fix_leaves graph =
-  NS.fold (fun leaf graph -> if NM.mem leaf graph then graph else NM.add leaf NS.empty graph) (leaves graph) graph
-
 let instrs_graph instrs =
   let icounter = ref 0 in
-  let graph = ref NM.empty in
+  let graph = ref DepGraph.empty in
 
   let rec add_instr last_instr (I_aux (instr, _) as iaux) =
     incr icounter;
@@ -2293,38 +2276,37 @@ let instrs_graph instrs =
     | I_if (_, then_instrs, else_instrs, _) ->
        begin
          let inputs, _ = instr_deps instr in (* if has no outputs *)
-         graph := add_link last_instr node !graph;
-         NS.iter (fun input -> graph := add_link input node !graph) inputs;
+         graph := DepGraph.add_edge last_instr node !graph;
+         NS.iter (fun input -> graph := DepGraph.add_edge input node !graph) inputs;
          let n1 = List.fold_left add_instr node then_instrs in
          let n2 = List.fold_left add_instr node else_instrs in
          incr icounter;
          let join = G_instr (!icounter, icomment "join") in
-         graph := add_link n1 join !graph;
-         graph := add_link n2 join !graph;
+         graph := DepGraph.add_edge n1 join !graph;
+         graph := DepGraph.add_edge n2 join !graph;
          join
        end
     | I_goto label ->
        begin
          let _, outputs = instr_deps instr in
-         graph := add_link last_instr node !graph;
-         NS.iter (fun output -> graph := add_link node output !graph) outputs;
+         graph := DepGraph.add_edge last_instr node !graph;
+         NS.iter (fun output -> graph := DepGraph.add_edge node output !graph) outputs;
          incr icounter;
          G_instr (!icounter, icomment "after goto")
        end
     | _ ->
        begin
          let inputs, outputs = instr_deps instr in
-         graph := add_link last_instr node !graph;
-         NS.iter (fun input -> graph := add_link input node !graph) inputs;
-         NS.iter (fun output -> graph := add_link node output !graph) outputs;
+         graph := DepGraph.add_edge last_instr node !graph;
+         NS.iter (fun input -> graph := DepGraph.add_edge input node !graph) inputs;
+         NS.iter (fun output -> graph := DepGraph.add_edge node output !graph) outputs;
          node
        end
   in
   ignore (List.fold_left add_instr G_start instrs);
-  fix_leaves !graph
+  !graph
 
 let make_dot id graph =
-  Util.opt_colors := false;
   let to_string node = String.escaped (string_of_node node) in
   let node_color = function
     | G_start                           -> "lightpink"
@@ -2350,17 +2332,7 @@ let make_dot id graph =
     | _        , _         -> "coral3"
   in
   let out_chan = open_out (Util.zencode_string (string_of_id id) ^ ".gv") in
-  output_string out_chan "digraph DEPS {\n";
-  let make_node from_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
-  in
-  let make_line from_node to_node =
-    output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
-  in
-  NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
-  NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
-  output_string out_chan "}\n";
-  Util.opt_colors := true;
+  DepGraph.visualize ~node_label:to_string ~node_color:node_color ~edge_color:edge_color out_chan "DEPS" graph;
   close_out out_chan
 
 (**************************************************************************)

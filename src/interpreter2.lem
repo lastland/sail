@@ -159,10 +159,10 @@ let rec eval env state =
      match (env.externs f, vs) with
      | (Just "print_endline", [V_string str]) ->
         Print str (bind_lexp env lexp state V_unit)
-        
+
      | (Just extern, _) ->
         bind_lexp env lexp state (primops extern vs)
-        
+
      | (Nothing, _) ->
         match find (is_fundef f) env.ast with
         | Just (CDEF_fundef _ heap_return ids instrs) ->

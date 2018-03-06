@@ -67,12 +67,24 @@ let fix_instantiation instantiation =
 let rec polymorphic_functions is_kopt (Defs defs) =
   match defs with
   | DEF_spec (VS_aux (VS_val_spec (TypSchm_aux (TypSchm_ts (typq, typ) , _), id, _, externs), _)) :: defs ->
-     let is_type_polymorphic = List.exists is_kopt (quant_kopts typq) in
-     if is_type_polymorphic then
+     let is_polymorphic = List.exists is_kopt (quant_kopts typq) in
+     if is_polymorphic then
        IdSet.add id (polymorphic_functions is_kopt (Defs defs))
      else
        polymorphic_functions is_kopt (Defs defs)
   | _ :: defs -> polymorphic_functions is_kopt (Defs defs)
+  | [] -> IdSet.empty
+
+let rec polymorphic_variants is_kopt (Defs defs) =
+  match defs with
+  | DEF_type (TD_aux (TD_variant (id, _, typq, ctors, _), _)) :: defs ->
+     let is_polymorphic = List.exists is_kopt (quant_kopts typq) in
+     if is_polymorphic then
+       (prerr_endline (Util.("Polymorphic variant: " |> magenta |> clear) ^ string_of_id id);
+        IdSet.add id (polymorphic_variants is_kopt (Defs defs)))
+     else
+       polymorphic_variants is_kopt (Defs defs)
+  | _ :: defs -> polymorphic_variants is_kopt (Defs defs)
   | [] -> IdSet.empty
 
 let string_of_instantiation instantiation =
@@ -376,9 +388,14 @@ let specialize_ids ids ast =
   ast, env
 
 let rec specialize ast env =
-  let ids = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
-  if IdSet.is_empty ids then
+  let functions = polymorphic_functions (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
+  let variants = polymorphic_variants (fun kopt -> is_typ_kopt kopt || is_order_kopt kopt) ast in
+
+  let justs = instantiations_of (mk_id "Some") ast in
+  List.iter (fun i -> prerr_endline (string_of_instantiation i)) justs;
+
+  if IdSet.is_empty functions (* && IdSet.is_empty variants *) then
     ast, env
   else
-    let ast, env = specialize_ids ids ast in
+    let ast, env = specialize_ids functions ast in
     specialize ast env
