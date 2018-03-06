@@ -5,7 +5,12 @@ val not_bool = "not" : bool -> bool
 val and_bool = "and_bool" : (bool, bool) -> bool
 val or_bool = "or_bool" : (bool, bool) -> bool
 
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {
+  ocaml: "eq_int",
+  lem: "eq",
+  c: "eq_int",
+  interpreter: "eq_int"
+} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 

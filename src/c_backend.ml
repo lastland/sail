@@ -891,15 +891,6 @@ let c_literals ctx =
   in
   map_aval c_literal
 
-let mask m =
-  if Big_int.less_equal m (Big_int.of_int 64) then
-    let n = Big_int.to_int m in
-    if n mod 4 == 0
-    then "0x" ^ String.make (16 - n / 4) '0' ^ String.make (n / 4) 'F' ^ "ul"
-    else "0b" ^ String.make (64 - n) '0' ^ String.make n '1' ^ "ul"
-  else
-    failwith "Tried to create a mask literal for a vector greater than 64 bits."
-
 let rec is_bitvector = function
   | [] -> true
   | AV_lit (L_aux (L_zero, _), _) :: avals -> is_bitvector avals

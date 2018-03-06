@@ -104,6 +104,7 @@ let sail_logo =
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
 let interactive_state = ref (initial_state !interactive_ast)
+let interactive_byte_ast = ref []
 
 let print_program () =
   match !current_mode with
@@ -124,13 +125,13 @@ let rec run () =
        match frame with
        | Done (state, v) ->
           interactive_state := state;
-          print_endline ("Result = " ^ Value.string_of_value v);
+          print_endline ("Result = " ^ Value.string_of_value v ^ ", " ^ string_of_int !step_count ^ " steps");
           current_mode := Normal
        | Step (out, state, _, stack) ->
           current_mode := Evaluation (eval_frame !interactive_ast frame);
           run ()
        | Break frame ->
-          print_endline "Breakpoint";
+          print_endline ("Breakpoint after " ^ string_of_int !step_count ^ " steps");
           current_mode := Evaluation frame
      end
 
@@ -270,11 +271,17 @@ let handle_input' input =
             let ast, env = Specialize.specialize ast !interactive_env in
             let ctx = initial_ctx env in
             let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
+            interactive_byte_ast := byte_ast;
             let chan = open_out arg in
             Util.opt_colors := false;
             Pretty_print_sail.pretty_sail chan (separate_map hardline pp_cdef byte_ast);
             Util.opt_colors := true;
             close_out chan
+         | ":main" ->
+            let open Interpreter2 in
+            let open Interpreter_interface in
+            let ienv = initial_env !interactive_byte_ast (get_extern !interactive_env) in
+            run (sail_call ienv (mk_id "main") [V_unit])
          | ":ast" ->
             let chan = open_out arg in
             Pretty_print_sail.pp_defs chan !interactive_ast;
@@ -330,6 +337,7 @@ let handle_input' input =
          begin
            match cmd with
            | ":r" | ":run" ->
+              step_count := 0;
               run ()
            | ":s" | ":step" ->
               run_steps (int_of_string arg)

@@ -237,7 +237,10 @@ let get_interpreter_extern id env =
   try Env.get_extern id env "interpreter" with
   | Type_error _ -> Env.get_extern id env "ocaml"
 
+let step_count = ref 0
+                                   
 let rec step (E_aux (e_aux, annot) as orig_exp) =
+  incr step_count;
   let wrap e_aux' = return (E_aux (e_aux', annot)) in
   match e_aux with
   | E_block [] -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))

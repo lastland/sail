@@ -8,6 +8,7 @@ function fetch_and_execute () =
     try {
       let instr = aget_Mem(_PC, 4, AccType_IFETCH);
       decode(instr);
+      break();
     } catch {
       Error_See("HINT") => (),
       _ => exit(())

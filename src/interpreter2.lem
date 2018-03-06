@@ -1,0 +1,244 @@
+(**************************************************************************)
+(*     Sail                                                               *)
+(*                                                                        *)
+(*  Copyright (c) 2013-2017                                               *)
+(*    Kathyrn Gray                                                        *)
+(*    Shaked Flur                                                         *)
+(*    Stephen Kell                                                        *)
+(*    Gabriel Kerneis                                                     *)
+(*    Robert Norton-Wright                                                *)
+(*    Christopher Pulte                                                   *)
+(*    Peter Sewell                                                        *)
+(*    Alasdair Armstrong                                                  *)
+(*    Brian Campbell                                                      *)
+(*    Thomas Bauereiss                                                    *)
+(*    Anthony Fox                                                         *)
+(*    Jon French                                                          *)
+(*    Dominic Mulligan                                                    *)
+(*    Stephen Kell                                                        *)
+(*    Mark Wassell                                                        *)
+(*                                                                        *)
+(*  All rights reserved.                                                  *)
+(*                                                                        *)
+(*  This software was developed by the University of Cambridge Computer   *)
+(*  Laboratory as part of the Rigorous Engineering of Mainstream Systems  *)
+(*  (REMS) project, funded by EPSRC grant EP/K008528/1.                   *)
+(*                                                                        *)
+(*  Redistribution and use in source and binary forms, with or without    *)
+(*  modification, are permitted provided that the following conditions    *)
+(*  are met:                                                              *)
+(*  1. Redistributions of source code must retain the above copyright     *)
+(*     notice, this list of conditions and the following disclaimer.      *)
+(*  2. Redistributions in binary form must reproduce the above copyright  *)
+(*     notice, this list of conditions and the following disclaimer in    *)
+(*     the documentation and/or other materials provided with the         *)
+(*     distribution.                                                      *)
+(*                                                                        *)
+(*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''    *)
+(*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED     *)
+(*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A       *)
+(*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR   *)
+(*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,          *)
+(*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT      *)
+(*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF      *)
+(*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND   *)
+(*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,    *)
+(*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT    *)
+(*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF    *)
+(*  SUCH DAMAGE.                                                          *)
+(**************************************************************************)
+
+open import Pervasives
+open import Assert_extra
+import Map
+import List
+
+open import Bytecode
+open import Prompt_monad
+open import Value2
+
+let string_of_id = function
+  | Ast.Id_aux (Ast.Id str) _ -> str
+  | Ast.Id_aux (Ast.DeIid str) _ -> "operator " ^ str
+end
+
+let id_equal id1 id2 =
+  match (id1, id2) with
+  | (Ast.Id_aux (Ast.Id str1) _, Ast.Id_aux (Ast.Id str2) _) -> str1 = str2
+  | (Ast.Id_aux (Ast.DeIid str1) _, Ast.Id_aux (Ast.DeIid str2) _) -> str1 = str2
+  | (_, _) -> false
+  end
+
+type outcome = monad vl vl vl
+
+type frame =
+  <| pc : nat; instrs : list instr; locals : Map.map Ast.id vl |>
+
+type state =
+  <| frame : frame;
+     stack : list (clexp * frame);
+     have_exception : bool;
+     current_exception : vl; |>
+
+type env =
+  <| ast : list cdef; externs : Ast.id -> maybe string; |>
+
+let initial_env cdefs externs =
+  <| ast = cdefs; externs = externs |>
+
+let increment_frame_pc frame = <| frame with pc = frame.pc + 1 |>
+let set_frame_pc frame new_pc = <| frame with pc = new_pc |>
+
+let increment_pc state = <| state with frame = increment_frame_pc state.frame |>
+let set_pc state new_pc = <| state with frame = set_frame_pc state.frame new_pc |>
+
+let set_frame_local id value frame = <| frame with locals = Map.insert id value frame.locals |>
+let set_local id value state = <| state with frame = set_frame_local id value state.frame |>
+
+let is_label label = function
+  | I_aux (I_label label') _ -> label = label'
+  | _ -> false
+end
+
+let goto label state =
+  match findIndices (is_label label) state.frame.instrs with
+  | [i] -> set_pc state i
+  end
+
+let is_fundef id = function
+  | (CDEF_fundef id' _ _ _ as fdef) -> id_equal id id'
+  | _ -> false
+  end
+
+let rec mapM f = function
+  | [] -> return []
+  | (x :: xs) ->
+     f x >>= (fun y -> (mapM f xs >>= fun ys -> return (y :: ys)))
+  end
+
+val eval : env -> state -> outcome
+
+let rec eval env state =
+  let frame = state.frame in
+  let instr = index (frame.instrs) (frame.pc) in
+
+  match instr with
+  | Just (I_aux (I_decl _ id) _) ->
+     eval env (increment_pc (set_local id V_null state))
+
+  | Just (I_aux (I_alloc _ _) _) ->
+     eval env (increment_pc state)
+
+  | Just (I_aux (I_init _ id (exp, _)) _) ->
+     eval_exp state exp >>= fun v ->
+     eval env (increment_pc (set_local id v state))
+
+  | Just (I_aux (I_jump (exp, _) label) _) ->
+     eval_exp state exp >>= fun v ->
+     let jump = function
+       | true -> eval env (goto label state)
+       | false -> eval env (increment_pc state)
+     end in
+     match v with
+     | V_bool b -> jump b
+     | V_nondet -> Undefined jump
+     | _ -> Error "Expected boolean"
+     end
+
+  | Just (I_aux (I_copy lexp (exp, _)) _) ->
+     eval_exp state exp >>= bind_lexp env lexp state
+
+  | Just (I_aux (I_convert lexp _ id _) _) ->
+     eval_exp state (F_id id) >>= bind_lexp env lexp state
+
+  | Just (I_aux (I_goto label) _) ->
+     eval env (goto label state)
+
+  | Just (I_aux (I_funcall lexp f args _) _) ->
+     mapM (eval_exp state) (map fst args) >>= fun vs ->
+     match (env.externs f, vs) with
+     | (Just "print_endline", [V_string str]) ->
+        Print str (bind_lexp env lexp state V_unit)
+        
+     | (Just extern, _) ->
+        bind_lexp env lexp state (primops extern vs)
+        
+     | (Nothing, _) ->
+        match find (is_fundef f) env.ast with
+        | Just (CDEF_fundef _ heap_return ids instrs) ->
+           let frame = <| pc = 0; instrs = instrs; locals = Map.empty |> in
+           let frame = List.foldl (fun fr (id, arg) -> set_frame_local id arg fr) frame (List.zip ids vs) in
+           eval env <| state with frame = frame; stack = (lexp, state.frame) :: state.stack |>
+        | _ -> Error "Function not found"
+        end
+     end
+
+  | Just (I_aux (I_return (exp, _)) _) ->
+     eval_exp state exp >>= fun v ->
+     match state.stack with
+     | [] -> Done v
+     | ((lexp, frame) :: stack) ->
+        let state = <| state with stack = stack; frame = frame |> in
+        bind_lexp env lexp state v
+     end
+
+  | Just (I_aux I_match_failure _) ->
+     Error "Pattern match failed"
+
+  | Just (I_aux (I_clear _ _) _) -> eval env (increment_pc state)
+  | Just (I_aux (I_comment _) _) -> eval env (increment_pc state)
+  | Just (I_aux (I_label _) _) -> eval env (increment_pc state)
+
+  | Nothing ->
+     Error ("Nothing " ^ show frame.pc ^ " " ^ show (length frame.instrs))
+
+  | Just (I_aux (I_if _ _ _ _) _) ->
+     failwith "if should not exist in interpreted bytecode"
+  | Just (I_aux (I_block _) _) ->
+     failwith "block should not exist in interpreted bytecode"
+  | Just (I_aux (I_try_block _) _) ->
+     failwith "try_block should not exist in interpreted bytecode"
+  | Just (I_aux (I_throw _) _) ->
+     failwith "throw should not exist in interpreted bytecode"
+  | Just (I_aux (I_raw _) _) ->
+     failwith "raw C should not exist in interpreted bytecode"
+  | Just (I_aux (I_reset _ _) _) ->
+     failwith "reset should not exist in interpreted bytecode"
+  | Just (I_aux (I_reinit _ _ _) _) ->
+     failwith "reinitialise should not exist in interpreted bytecode"
+  end
+
+and bind_lexp env lexp state v = match lexp with
+  | CL_id id ->
+     match Map.lookup id state.frame.locals with
+     | Just _ -> eval env (increment_pc (set_local id v state))
+     | Nothing -> Write_reg (string_of_id id) v (eval env (increment_pc state))
+     end
+  | CL_current_exception -> eval env <| state with current_exception = v |>
+  | CL_have_exception ->
+     match v with
+     | V_bool b -> eval env <| state with have_exception = b |>
+     | _ -> Error "Tried setting have_exception to non-boolean"
+     end
+  | _ -> failwith "TODO lexp"
+  end
+
+and eval_exp state exp =
+  let frame = state.frame in
+  match exp with
+  | F_id id ->
+     match Map.lookup id frame.locals with
+     | Just v -> Done v
+     | Nothing -> Read_reg (string_of_id id) (fun v -> Done v)
+     end
+  | F_lit v -> Done v
+  end
+
+let sail_call env f args =
+  match find (is_fundef f) env.ast with
+  | Just (CDEF_fundef _ heap_return ids instrs) ->
+     let frame = <| pc = 0; instrs = instrs; locals = Map.empty |> in
+     let frame = List.foldl (fun fr (id, arg) -> set_frame_local id arg fr) frame (List.zip ids args) in
+     eval env <| frame = frame; stack = []; current_exception = V_null; have_exception = false |>
+  | _ -> Error "Function not found"
+  end

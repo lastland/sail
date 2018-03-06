@@ -48,64 +48,114 @@
 (*  SUCH DAMAGE.                                                          *)
 (**************************************************************************)
 
-open Ocamlbuild_plugin ;;
-open Command ;;
-open Pathname ;;
-open Outcome ;;
+open Ast
+open Ast_util
 
-let split ch s =
-  let x = ref [] in
-  let rec go s =
-    if not (String.contains s ch) then List.rev (s :: !x)
-    else begin
-      let pos = String.index s ch in
-      x := (String.before s pos)::!x;
-      go (String.after s (pos + 1))
-    end
+open Prompt_monad
+open Bytecode
+open Interpreter2
+open Value2
+
+let rec get_functions = function
+  | CDEF_fundef (id, _, _, _) :: cdefs -> id :: get_functions cdefs
+  | _ :: cdefs -> get_functions cdefs
+
+let get_extern tc_env id =
+  let open Type_check in
+  if Env.is_extern id tc_env "interpreter" then
+    Some (Env.get_extern id tc_env "interpreter")
+  else
+    None
+
+type graph_node = G_node of int * string * string
+
+module Node = struct
+  type t = graph_node
+  let compare gn1 gn2 =
+    match gn1, gn2 with
+    | G_node (id1, _, _), G_node (id2, _, _) -> compare id1 id2
+end
+
+module NM = Map.Make(Node)
+module NS = Set.Make(Node)
+
+type execution_graph = NS.t NM.t
+
+let graph = ref NM.empty
+                            
+let node_counter = ref 0
+
+let new_node color str =
+  let n = G_node (!node_counter, color, str) in
+  incr node_counter;
+  n
+
+let add_link from_node to_node graph =
+  try
+    NM.add from_node (NS.add to_node (NM.find from_node graph)) graph
+  with
+  | Not_found -> NM.add from_node (NS.singleton to_node) graph
+
+let leaves graph =
+  List.fold_left (fun acc (from_node, to_nodes) -> NS.filter (fun to_node -> Node.compare to_node from_node != 0) (NS.union acc to_nodes))
+                 NS.empty
+                 (NM.bindings graph)
+
+(* Ensure that all leaves exist in the graph *)
+let fix_leaves graph =
+  NS.fold (fun leaf graph -> if NM.mem leaf graph then graph else NM.add leaf NS.empty graph) (leaves graph) graph
+
+let make_dot file graph =
+  Util.opt_colors := false;
+  let to_string = function
+    | G_node (n, _, str) -> String.escaped (string_of_int n ^ ". " ^ str)
   in
-  go s
-
-(* paths relative to _build *)
-let lem_dir =
-  try Sys.getenv "LEM_DIR" (* LEM_DIR must contain an absolute path *)
-  with Not_found -> "../../../lem" ;;
-let lem = lem_dir / "lem" ;;
-
-(* All -wl ignores should be removed if you want to see the pattern compilation, exhaustive, and unused var warnings *)
-let lem_opts = [A "-lib"; P "../gen_lib";
-                A "-lib"; P "..";
-                A "-wl_pat_comp"; P "ign"; 
-                A "-wl_pat_exh";  P "ign"; 
-                A "-wl_pat_fail"; P "ign";
-                A "-wl_unused_vars";   P "ign";
-(*                A "-suppress_renaming";*)
-               ] ;;
-
-dispatch begin function
-| After_rules ->
-    (* ocaml_lib "lem_interp/interp"; *)
-    ocaml_lib ~extern:false ~dir:"pprint/src" ~tag_name:"use_pprint" "pprint/src/PPrintLib";
-
-    rule "lem -> ml"
-    ~prod: "%.ml"
-    ~dep: "%.lem"
-    (fun env builder -> Seq [
-      Cmd (S ([ P lem] @ lem_opts @ [ A "-ocaml"; P (env "%.lem") ]));
-      ]);
-
-    rule "sail -> lem"
-    ~prod: "%.lem"
-    ~deps: ["%.sail"; "sail.native"]
-    (fun env builder ->
-      let sail_opts = List.map (fun s -> A s) (
-        "-lem_ast" ::
-        try
-          split ',' (Sys.getenv "SAIL_OPTS")
-        with Not_found -> []) in
-      Seq [
-        Cmd (S ([ P "./sail.native"] @ sail_opts @ [P (env "%.sail")]));
-        mv (basename (env "%.lem")) (dirname (env "%.lem"))
-      ]);
-
-| _ -> ()
-end ;;
+  let node_color = function
+    | G_node (_, color, _) -> color
+  in
+  let edge_color from_node to_node =
+    match from_node, to_node with
+    | _, _ -> "black"
+  in
+  let out_chan = open_out (file ^ ".gv") in
+  output_string out_chan "digraph DEPS {\n";
+  let make_node from_node =
+    output_string out_chan (Printf.sprintf "  \"%s\" [fillcolor=%s;style=filled];\n" (to_string from_node) (node_color from_node))
+  in
+  let make_line from_node to_node =
+    output_string out_chan (Printf.sprintf "  \"%s\" -> \"%s\" [color=%s];\n" (to_string from_node) (to_string to_node) (edge_color from_node to_node))
+  in
+  NM.bindings graph |> List.iter (fun (from_node, _) -> make_node from_node);
+  NM.bindings graph |> List.iter (fun (from_node, to_nodes) -> NS.iter (make_line from_node) to_nodes);
+  output_string out_chan "}\n";
+  Util.opt_colors := true;
+  close_out out_chan
+          
+let run k =
+  let rec run_outcome from = function
+    | Done v ->
+       let node = new_node "olivedrab1" "Done" in
+       graph := add_link from node !graph;
+       
+    | Print (str, k) ->
+       let node = new_node "lightpink" str in
+       graph := add_link from node !graph;
+       run_outcome node k
+                   
+    | Undefined k ->
+       let node = new_node "azure" "Choice" in
+       graph := add_link from node !graph;
+       run_outcome node (k true);
+       run_outcome node (k false)
+                   
+    | Error str ->
+       let node = new_node "orange1" ("Error " ^ str) in
+       graph := add_link from node !graph
+                         
+    | _ -> failwith "Unimplemented"
+  in
+  node_counter := 0;
+  let node = new_node "peachpuff" "Start" in
+  run_outcome node k;
+  fix_leaves !graph;
+  make_dot "run" !graph;

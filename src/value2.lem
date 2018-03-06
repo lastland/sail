@@ -95,5 +95,13 @@ let primops extern args =
   | ("or_bool", [V_bool true; V_nondet]) -> V_bool true
   | ("or_bool", _) -> V_nondet
 
+  | ("eq_int", [V_int n; V_int m]) -> V_bool (n = m)
+  
+  | ("add_int", [V_int n; V_int m]) -> V_int (n + m)
+
+  | ("sub_int", [V_int n; V_int m]) -> V_int (n + m)
+
+  | ("choice", _) -> V_nondet
+
   | _ -> failwith ("Unimplemented primitive operation " ^ extern)
   end
