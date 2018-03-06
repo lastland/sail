@@ -80,8 +80,6 @@ module Trace = Graph.Make(Node)
 
 type execution_graph = Trace.t
 
-let graph = ref Trace.empty
-
 let node_counter = ref 0
 
 let new_node color str =
@@ -105,6 +103,7 @@ let make_dot file graph =
   close_out out_chan
 
 let run k =
+  let graph = ref Trace.empty in
   let rec run_outcome from = function
     | Done v ->
        let node = new_node "olivedrab1" "Done" in
