@@ -203,6 +203,7 @@ let _ =
     usage_msg
 
 let interactive_ast = ref (Ast.Defs [])
+let interactive_byte_ast = ref []
 let interactive_env = ref Type_check.initial_env
 
 let load_files type_envs files =
@@ -248,7 +249,16 @@ let main() =
     begin
       (if !(opt_interactive)
        then
-         (interactive_ast := Process_file.rewrite_ast_interpreter ast; interactive_env := type_envs)
+         begin
+           let open C_backend in
+           let ast = Process_file.rewrite_ast_c ast in
+           let ast, env = Specialize.specialize ast type_envs in
+           let ctx = initial_ctx env in
+           let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
+           interactive_env := type_envs;
+           interactive_ast := ast;
+           interactive_byte_ast := byte_ast
+         end
        else ());
       (if !(opt_sanity)
        then

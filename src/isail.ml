@@ -103,57 +103,6 @@ let sail_logo =
 
 let vs_ids = ref (Initial_check.val_spec_ids !interactive_ast)
 
-let interactive_state = ref (initial_state !interactive_ast)
-let interactive_byte_ast = ref []
-
-let print_program () =
-  match !current_mode with
-  | Normal -> ()
-  | Evaluation (Step (out, _, _, stack)) ->
-     let sep = "-----------------------------------------------------" |> Util.blue |> Util.clear in
-     List.map stack_string stack |> List.rev |> List.iter (fun code -> print_endline code; print_endline sep);
-     print_endline out
-  | Evaluation (Done (_, v)) ->
-     print_endline (Value.string_of_value v |> Util.green |> Util.clear)
-  | Evaluation _ -> ()
-
-let rec run () =
-  match !current_mode with
-  | Normal -> ()
-  | Evaluation frame ->
-     begin
-       match frame with
-       | Done (state, v) ->
-          interactive_state := state;
-          print_endline ("Result = " ^ Value.string_of_value v ^ ", " ^ string_of_int !step_count ^ " steps");
-          current_mode := Normal
-       | Step (out, state, _, stack) ->
-          current_mode := Evaluation (eval_frame !interactive_ast frame);
-          run ()
-       | Break frame ->
-          print_endline ("Breakpoint after " ^ string_of_int !step_count ^ " steps");
-          current_mode := Evaluation frame
-     end
-
-let rec run_steps n =
-  match !current_mode with
-  | _ when n <= 0 -> ()
-  | Normal -> ()
-  | Evaluation frame ->
-     begin
-       match frame with
-       | Done (state, v) ->
-          interactive_state := state;
-          print_endline ("Result = " ^ Value.string_of_value v);
-          current_mode := Normal
-       | Step (out, state, _, stack) ->
-          current_mode := Evaluation (eval_frame !interactive_ast frame);
-          run_steps (n - 1)
-       | Break frame ->
-          print_endline "Breakpoint";
-          current_mode := Evaluation frame
-     end
-
 let help = function
   | ":t" | ":type" ->
      "(:t | :type) <function name> - Print the type of a function."
@@ -263,19 +212,13 @@ let handle_input' input =
             let ast, env = Specialize.specialize !interactive_ast !interactive_env in
             interactive_ast := ast;
             interactive_env := env;
-            interactive_state := initial_state !interactive_ast
          | ":bytecode" ->
             let open PPrint in
-            let open C_backend in
-            let ast = Process_file.rewrite_ast_c !interactive_ast in
-            let ast, env = Specialize.specialize ast !interactive_env in
-            let ctx = initial_ctx env in
-            let byte_ast = bytecode_ast ctx (fun cdefs -> List.concat (List.map (flatten_instrs ctx) cdefs)) ast in
-            interactive_byte_ast := byte_ast;
             let chan = open_out arg in
+            let using_color = !Util.opt_colors in
             Util.opt_colors := false;
-            Pretty_print_sail.pretty_sail chan (separate_map hardline pp_cdef byte_ast);
-            Util.opt_colors := true;
+            Pretty_print_sail.pretty_sail chan (separate_map hardline C_backend.pp_cdef !interactive_byte_ast);
+            Util.opt_colors := using_color;
             close_out chan
          | ":main" ->
             let open Interpreter2 in
@@ -309,13 +252,11 @@ let handle_input' input =
                let (_, ast, env) = load_files !interactive_env files in
                let ast = Process_file.rewrite_ast_interpreter ast in
                interactive_ast := append_ast !interactive_ast ast;
-               interactive_state := initial_state !interactive_ast;
                interactive_env := env;
                vs_ids := Initial_check.val_spec_ids !interactive_ast
             | ":u" | ":unload" ->
                interactive_ast := Ast.Defs [];
                interactive_env := Type_check.initial_env;
-               interactive_state := initial_state !interactive_ast;
                vs_ids := Initial_check.val_spec_ids !interactive_ast;
                (* See initial_check.mli for an explanation of why we need this. *)
                Initial_check.have_undefined_builtins := false
@@ -324,9 +265,27 @@ let handle_input' input =
        | Expression str ->
           (* An expression in normal mode is type checked, then puts
              us in evaluation mode. *)
+          let open C_backend in
+          let open Bytecode in
           let exp = Type_check.infer_exp !interactive_env (Initial_check.exp_of_string Ast_util.dec_ord str) in
-          current_mode := Evaluation (eval_frame !interactive_ast (Step ("", !interactive_state, return exp, [])));
-          print_program ()
+          print_endline "evaluating";
+          let aexp = anf exp in
+          print_endline (Pretty_print_sail.to_string (pp_aexp aexp));
+          let v = mk_id "interactive#" in
+          let ctx = initial_ctx !interactive_env in
+          let assert_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_assert") "(bool, string) -> unit effect {escape}" in
+          let exit_vs = Initial_check.extern_of_string dec_ord (mk_id "sail_exit") "unit -> unit effect {escape}" in
+          let ctx = { ctx with tc_env = snd (Type_check.check ctx.tc_env (Defs [assert_vs; exit_vs])) } in
+          let setup, _, call, cleanup = compile_aexp ctx aexp in
+          let instrs = setup @ [call (CL_id v)] @ cleanup in
+          print_endline (Pretty_print_sail.to_string PPrint.(separate_map (semi ^^ hardline) pp_instr instrs));
+          let open Interpreter2 in
+          let open Interpreter_interface in
+          let ienv = initial_env !interactive_byte_ast (get_extern !interactive_env) in
+          run (eval_instrs ienv v instrs);
+          ignore (Sys.command "dot -Tpng run.gv -o run.png");
+          ignore (Sys.command "xdg-open run.png");
+
        | Empty -> ()
      end
   | Evaluation frame ->
@@ -336,11 +295,6 @@ let handle_input' input =
          (* Evaluation mode commands *)
          begin
            match cmd with
-           | ":r" | ":run" ->
-              step_count := 0;
-              run ()
-           | ":s" | ":step" ->
-              run_steps (int_of_string arg)
            | ":n" | ":normal" ->
               current_mode := Normal
            | _ -> unrecognised_command cmd
@@ -350,20 +304,7 @@ let handle_input' input =
        | Empty ->
           (* Empty input will evaluate one step, or switch back to
              normal mode when evaluation is completed. *)
-          begin
-            match frame with
-            | Done (state, v) ->
-               interactive_state := state;
-               print_endline ("Result = " ^ Value.string_of_value v);
-               current_mode := Normal
-            | Step (out, state, _, stack) ->
-               interactive_state := state;
-               current_mode := Evaluation (eval_frame !interactive_ast frame);
-               print_program ()
-            | Break frame ->
-               print_endline "Breakpoint";
-               current_mode := Evaluation frame
-          end
+          current_mode := Evaluation frame
      end
 
 let handle_input input =

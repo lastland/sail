@@ -90,7 +90,6 @@ let new_node color str =
   n
 
 let make_dot file graph =
-  Util.opt_colors := false;
   let to_string = function
     | G_node (n, _, str) -> String.escaped (string_of_int n ^ ". " ^ str)
   in
@@ -125,6 +124,9 @@ let run k =
     | Error str ->
        let node = new_node "orange1" ("Error " ^ str) in
        graph := Trace.add_edge from node !graph
+
+    | Read_reg _ -> failwith "RR"
+    | Write_reg _ -> failwith "WR"
 
     | _ -> failwith "Unimplemented"
   in

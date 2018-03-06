@@ -1320,6 +1320,9 @@ let rec compile_aval ctx = function
      (F_id gs, CT_real),
      [iclear CT_real gs]
 
+  | AV_lit (L_aux (L_unit, l) as lit, _) ->
+     [], (F_lit V_unit, CT_unit), []
+
   | AV_lit (L_aux (_, l) as lit, _) ->
      c_error ~loc:l ("Encountered unexpected literal " ^ string_of_lit lit)
 
@@ -2084,7 +2087,6 @@ let compile_def ctx = function
 
   | DEF_fundef (FD_aux (FD_function (_, _, _, [FCL_aux (FCL_Funcl (id, Pat_aux (Pat_exp (pat, exp), _)), _)]), _)) ->
      let aexp = map_functions (analyze_primop ctx) (c_literals ctx (no_shadow IdSet.empty (anf exp))) in
-     if string_of_id id = "main" then prerr_endline (Pretty_print_sail.to_string (pp_aexp aexp)) else ();
      let setup, ctyp, call, cleanup = compile_aexp ctx aexp in
      let gs = gensym () in
      let pat = match pat with

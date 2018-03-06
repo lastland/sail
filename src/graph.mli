@@ -76,7 +76,7 @@ module type S =
     val topsort : t -> node list
 
     (** Visualize a graph in graphviz format. node_label should return
-       a distinct label for every node.  node_color and edge_color use
+       a distinct label for every node. node_color and edge_color use
        colors from the graphviz X11 color scheme, see:
        https://www.graphviz.org/doc/info/colors.html. The string
        argument is the name of the graph in the output graphviz

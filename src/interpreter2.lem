@@ -51,6 +51,7 @@
 open import Pervasives
 open import Assert_extra
 import Map
+import Maybe
 import List
 
 open import Bytecode
@@ -72,7 +73,7 @@ let id_equal id1 id2 =
 type outcome = monad vl vl vl
 
 type frame =
-  <| pc : nat; instrs : list instr; locals : Map.map Ast.id vl |>
+  <| pc : nat; instrs : list instr; heap_return : maybe Ast.id; locals : Map.map Ast.id vl |>
 
 type state =
   <| frame : frame;
@@ -166,7 +167,7 @@ let rec eval env state =
      | (Nothing, _) ->
         match find (is_fundef f) env.ast with
         | Just (CDEF_fundef _ heap_return ids instrs) ->
-           let frame = <| pc = 0; instrs = instrs; locals = Map.empty |> in
+           let frame = <| pc = 0; instrs = instrs; heap_return = heap_return; locals = Map.empty |> in
            let frame = List.foldl (fun fr (id, arg) -> set_frame_local id arg fr) frame (List.zip ids vs) in
            eval env <| state with frame = frame; stack = (lexp, state.frame) :: state.stack |>
         | _ -> Error "Function not found"
@@ -190,7 +191,16 @@ let rec eval env state =
   | Just (I_aux (I_label _) _) -> eval env (increment_pc state)
 
   | Nothing ->
-     Error ("Nothing " ^ show frame.pc ^ " " ^ show (length frame.instrs))
+     match Maybe.bind frame.heap_return (fun id -> Map.lookup id frame.locals) with
+     | Just v ->
+        match state.stack with
+        | [] -> Done v
+        | ((lexp, frame) :: stack) ->
+           let state = <| state with stack = stack; frame = frame |> in
+           bind_lexp env lexp state v
+        end
+     | Nothing -> Error "Nothing to return"
+     end
 
   | Just (I_aux (I_if _ _ _ _) _) ->
      failwith "if should not exist in interpreted bytecode"
@@ -237,8 +247,12 @@ and eval_exp state exp =
 let sail_call env f args =
   match find (is_fundef f) env.ast with
   | Just (CDEF_fundef _ heap_return ids instrs) ->
-     let frame = <| pc = 0; instrs = instrs; locals = Map.empty |> in
+     let frame = <| pc = 0; instrs = instrs; heap_return = heap_return; locals = Map.empty |> in
      let frame = List.foldl (fun fr (id, arg) -> set_frame_local id arg fr) frame (List.zip ids args) in
      eval env <| frame = frame; stack = []; current_exception = V_null; have_exception = false |>
   | _ -> Error "Function not found"
   end
+
+let eval_instrs env heap_return instrs =
+  let frame = <| pc = 0; instrs = instrs; heap_return = Just heap_return; locals = Map.singleton heap_return V_null |> in
+  eval env <| frame = frame; stack = []; current_exception = V_null; have_exception = false |>
