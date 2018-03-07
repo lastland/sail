@@ -60,6 +60,8 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
+val not = "not" : bool -> bool
+
 val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
@@ -108,9 +110,6 @@ val __raw_SetSlice_bits : forall 'n 'w.
 
 val __raw_GetSlice_bits : forall 'n 'w.
   (atom('n), atom('w), bits('n), int) -> bits('w)
-
-val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
-val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
 
 val __SignExtendSlice = {lem: "exts_slice"} : forall 'm. (bits('m), int, int) -> bits('m)
 
@@ -225,7 +224,7 @@ overload operator / = {quotient_nat, quotient, quotient_real}
 val quot_round_zero = {ocaml: "quot_round_zero", lem: "hardware_quot"} : (int, int) -> int
 val rem_round_zero = {ocaml: "rem_round_zero", lem: "hardware_mod"} : (int, int) -> int
 
-val modulus = {ocaml: "modulus", lem: "hardware_mod"} : (int, int) -> int
+val modulus = {ocaml: "modulus", lem: "hardware_mod"} : forall 'n, 'n > 0 .  (int, atom('n)) -> range(0, 'n - 1)
 
 overload operator % = {modulus}
 
@@ -243,9 +242,13 @@ val max_nat = {ocaml: "max_int", lem: "max"} : (nat, nat) -> nat
 
 val max_int = {ocaml: "max_int", lem: "max"} : (int, int) -> int
 
-overload min = {min_nat, min_int}
+val min_atom = {ocaml: "min_int", lem: "min"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c <= 'a & 'c <= 'b . atom('c)}
 
-overload max = {max_nat, max_int}
+val max_atom = {ocaml: "max_int", lem: "max"} : forall 'a 'b . (atom('a), atom('b)) -> {'c, ('c = 'a | 'c = 'b) & 'c >= 'a & 'c >= 'b . atom('c)}
+
+overload min = {min_atom, min_nat, min_int}
+
+overload max = {max_atom, max_nat, max_int}
 
 val __WriteRAM = "write_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
@@ -317,6 +320,12 @@ val EXTZ : forall 'n 'm , 'm >= 'n . bits('n) -> bits('m)
 function EXTS v = sign_extend(v, sizeof('m))
 function EXTZ v = zero_extend(v, sizeof('m))
 
+val zeros : forall 'n, 'n >= 0 . unit -> bits('n)
+function zeros() = replicate_bits (0b0,'n)
+
+val ones : forall 'n, 'n >= 0 . unit -> bits('n)
+function ones() = replicate_bits (0b1,'n)
+
 infix 4 <_s
 infix 4 >=_s
 infix 4 <_u
@@ -346,8 +355,14 @@ infix 1 >>
 infix 1 <<
 infix 1 >>_s
 
-val operator >> = "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
-val operator << = "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val "shift_bits_right" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+val "shift_bits_left" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
+
+val "shiftl" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
+val "shiftr" : forall 'm 'n, 'n >= 0. (bits('m), atom('n)) -> bits('m)
+
+overload operator >> = {shift_bits_right, shiftr}
+overload operator << = {shift_bits_left, shiftl}
 val operator >>_s = "shift_bits_right_arith" : forall 'n 'm. (bits('n), bits('m)) -> bits('n)
 
 infix 7 *_s

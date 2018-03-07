@@ -433,6 +433,16 @@ let read_ram (addr_size, data_size, hex_ram, addr) =
   in
   read_byte data_size
 
+let tag_ram : bool RAM.t = RAM.create 256
+
+let write_tag (addr, tag) =
+  let addri = uint addr in
+  RAM.add tag_ram addri tag
+
+let read_tag addr =
+  let addri = uint addr in
+  try RAM.find tag_ram addri with Not_found -> false
+
 let rec reverse_endianness bits =
   if List.length bits <= 8 then bits else
   reverse_endianness (drop 8 bits) @ (take 8 bits)
@@ -561,18 +571,22 @@ let shift_bits_right_arith (x, y) =
   let msbs = replicate_bits (take 1 x, ybi) in
   let rbits = msbs @ x in
   take (List.length x) rbits
-                                                                                      
-let shift_bits_right (x, y) =
-  let ybi = uint(y) in
-  let zeros = zeros ybi in
+
+let shiftr (x, y) =
+  let zeros = zeros y in
   let rbits = zeros @ x in
   take (List.length x) rbits
+  
+let shift_bits_right (x, y) =
+  shiftr (x, uint(y))
 
-let shift_bits_left (x, y) =
-  let ybi = uint(y) in
-  let yi  = Big_int.to_int ybi in
-  let zeros = zeros ybi in
+let shiftl (x, y) =
+  let yi  = Big_int.to_int y in
+  let zeros = zeros y in
   let rbits = x @ zeros in
   drop yi rbits
+
+let shift_bits_left (x, y) =
+  shiftl (x, uint(y))
 
 let speculate_conditional_success () = true
