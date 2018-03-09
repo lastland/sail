@@ -122,8 +122,9 @@ let pp_type_error err =
        let relevant_typ_vars = KBindings.filter (fun kid _ -> KidSet.mem kid (tyvars_of_nc nc)) typ_vars |> KBindings.bindings |> assign_colors in
        let colors = List.fold_left (fun colors (color, (kid, _)) -> KBindings.add kid color colors) KBindings.empty relevant_typ_vars in
        let relevant_constraints = List.filter (fun nc' -> not (KidSet.is_empty (KidSet.inter (tyvars_of_nc nc) (tyvars_of_nc nc')))) all_constraints in
-       (string "Could not resolve quantifiers when calling " ^^ string (string_of_id id) ^^ space ^^ colon ^^ space ^^ string (string_of_typquant typq)
-       ^//^ group (separate_map hardline (fun quant -> string (string_of_quant_item ~colors:colors quant)) quants))
+       (string "Could not resolve quantifiers when calling "
+        ^^ string (string_of_id id) ^^ string " : " ^^ string (string_of_typquant typq) ^^ string " -"
+        ^//^ group (separate_map hardline (fun quant -> string (string_of_quant_item ~colors:colors quant)) quants))
        ^^ twice hardline
        ^^ separate_map (twice hardline) (fun (color, (kid, l)) -> pp_quantifier color l kid) relevant_typ_vars
        ^^ twice hardline
@@ -1633,7 +1634,7 @@ let rec subtyp l env (Typ_aux (typ_aux1, _) as typ1) (Typ_aux (typ_aux2, _) as t
   (* Special cases for two numeric (atom) types *)
   | Some (kids1, nc1, nexp1), Some ([], _, nexp2) ->
      let env = add_existential l kids1 nc1 env in
-     if prove env (nc_eq nexp1 nexp2) then () else typ_error l "NCNE"
+     if prove env (nc_eq nexp1 nexp2) then () else typ_raise l (Err_subtype (typ1, typ2, Env.get_constraints env))
   | Some (kids1, nc1, nexp1), Some (kids2, nc2, nexp2) ->
      let env = add_existential l kids1 nc1 env in
      let env = add_typ_vars l (KidSet.elements (KidSet.inter (nexp_frees nexp2) (KidSet.of_list kids2))) env in
@@ -2412,7 +2413,6 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
      annot_pat (P_as (typed_pat, id)) (pat_typ_of typed_pat), Env.add_local id (Immutable, pat_typ_of typed_pat) env, guards
   (* This is a special case for flow typing when we match a constant numeric literal. *)
   | P_lit (L_aux (L_num n, _) as lit) when is_atom typ ->
-     subtyp l env (atom_typ (nconstant n)) typ;
      let nexp = match destruct_atom_nexp env typ with Some n -> n | None -> assert false in
      annot_pat (P_lit lit) (atom_typ (nconstant n)), Env.add_constraint (nc_eq nexp (nconstant n)) env, []
   | _ ->
@@ -2919,6 +2919,7 @@ and instantiation_of (E_aux (exp_aux, (l, _)) as exp) =
   | _ -> invalid_arg ("instantiation_of expected application,  got " ^ string_of_exp exp)
 
 and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
+  typ_print (Util.("Application " |> cyan |> clear) ^ string_of_typquant typq ^ ". " ^ string_of_typ f_typ);
   let annot_exp exp typ eff = E_aux (exp, (l, Some (env, Env.canonicalize env typ, eff))) in
   let switch_annot env typ = function
     | (E_aux (exp, (l, Some (_, _, eff)))) -> E_aux (exp, (l, Some (env, typ, eff)))

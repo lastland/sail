@@ -2963,6 +2963,7 @@ let rewrite_defs_lem = [
   ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("guarded_pats", rewrite_defs_guarded_pats);
   (* ("register_ref_writes", rewrite_register_ref_writes); *)
+  (* ("recheck_defs", recheck_defs); *)
   ("fix_val_specs", rewrite_fix_val_specs);
   ("recheck_defs", recheck_defs);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);

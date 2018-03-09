@@ -3821,5 +3821,5 @@ let monomorphise opts splits env defs =
     else
       defs
   in
-  let () = if opts.dump_raw then Pretty_print_sail.pp_defs stdout defs else () in
+  let () = if opts.dump_raw then Pretty_print_sail.pp_defs stderr defs else () in
   recheck defs
