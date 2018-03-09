@@ -1,23 +1,31 @@
-SAIL:=../src/sail.native
-LEM:=../../lem/lem
+THIS_MAKEFILE := $(realpath $(lastword $(MAKEFILE_LIST)))
+SAIL_DIR:=$(realpath $(dir $(THIS_MAKEFILE))..)
+export SAIL_DIR
+SAIL_LIB_DIR:=$(SAIL_DIR)/lib
+MIPS_SAIL_DIR:=$(SAIL_DIR)/mips
 
-# SOURCES:=mips_prelude.sail mips_tlb.sail mips_wrappers.sail mips_insts.sail mips_ri.sail mips_epilogue.sail ../etc/regfp.sail mips_regfp.sail
-SOURCES:=mips_prelude.sail mips_tlb_stub.sail mips_wrappers.sail mips_insts.sail mips_epilogue.sail ../etc/regfp.sail mips_regfp.sail
+SAIL:=$(SAIL_DIR)/sail
 
+MIPS_PRE:=$(SAIL_LIB_DIR)/flow.sail $(MIPS_SAIL_DIR)/prelude.sail $(MIPS_SAIL_DIR)/mips_prelude.sail
+MIPS_TLB:=$(MIPS_SAIL_DIR)/mips_tlb.sail
+MIPS_TLB_STUB:=$(MIPS_SAIL_DIR)/mips_tlb_stub.sail
+MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.sail $(MIPS_SAIL_DIR)/mips_insts.sail $(MIPS_SAIL_DIR)/mips_ri.sail $(MIPS_SAIL_DIR)/mips_epilogue.sail
+MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
-all: mips.lem mips.ml mips_embed.lem
+mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
+	$(SAIL) -ocaml -o mips $^
 
-mips.lem: $(SOURCES)
-	$(SAIL) -lem_ast -o $(BUILD)/mips $(SOURCES)
+mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
+	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen $^
+mips_no_tlb_types.lem: mips_no_tlb.lem
 
-mips.ml: mips.lem ../src/lem_interp/interp_ast.lem
-	$(LEM) -ocaml -lib ../src/lem_interp/ $<
+# TODO: Use monomorphisation so that we can switch to machine words
+mips.lem: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS)
+	$(SAIL) -lem -o mips -lem_lib Mips_extras -undefined_gen $^
+mips_types.lem: mips.lem
 
-
-mips_embed.lem: $(SOURCES)
-# also generates mips_embed_sequential.lem, mips_embed_types.lem, mips_toFromInterp.lem
-	$(SAIL) -lem -lem_lib Mips_extras_embed -o mips $(SOURCES)
+M%.thy: m%.lem m%_types.lem mips_extras.lem
+	lem -isa -outdir . -lib $(SAIL_DIR)/src/gen_lib -lib $(SAIL_DIR)/src/lem_interp $^
 
 clean:
-	rm -f mips.lem mips.ml
-	rm -f mips_embed*.lem mips_toFromInterp.lem
+	rm -rf mips Mips.thy mips.lem _sbuild
