@@ -831,7 +831,7 @@ let rec is_stack_ctyp ctyp = match ctyp with
   | CT_uint64 _ | CT_int64 | CT_bit | CT_unit | CT_bool | CT_enum _ -> true
   | CT_bv _ | CT_mpz | CT_real | CT_string | CT_list _ | CT_vector _ -> false
   | CT_struct (_, fields) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) fields
-  | CT_variant (_, ctors) -> List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors
+  | CT_variant (_, ctors) -> false (* List.for_all (fun (_, ctyp) -> is_stack_ctyp ctyp) ctors *) (*FIXME*)
   | CT_tup ctyps -> List.for_all is_stack_ctyp ctyps
   | CT_ref ctyp -> is_stack_ctyp ctyp
 
@@ -1492,7 +1492,7 @@ let compile_funcall ctx id args typ =
 
 let rec compile_match ctx apat cval case_label =
   match apat, cval with
-  | AP_id pid, (frag, ctyp) when is_ct_variant ctyp ->
+  | AP_id pid, (frag, ctyp) when Env.is_union_constructor pid ctx.tc_env ->
      [ijump (F_op (F_field (frag, "kind"), "!=", F_lit (V_ctor_kind (string_of_id pid))), CT_bool) case_label],
      []
   | AP_global (pid, _), _ -> [icopy (CL_id pid) cval], []
@@ -2063,7 +2063,7 @@ let fix_exception ctx instrs =
 let letdef_count = ref 0
 
 (** Compile a Sail toplevel definition into an IR definition **)
-let compile_def ctx = function
+let rec compile_def ctx = function
   | DEF_reg_dec (DEC_aux (DEC_reg (typ, id), _)) ->
      [CDEF_reg_dec (id, ctyp_of_typ ctx typ)], ctx
   | DEF_reg_dec _ -> failwith "Unsupported register declaration" (* FIXME *)
@@ -2159,6 +2159,10 @@ let compile_def ctx = function
 
   (* Only the parser and sail pretty printer care about this. *)
   | DEF_fixity _ -> [], ctx
+
+  | DEF_internal_mutrec fundefs ->
+     let defs = List.map (fun fdef -> DEF_fundef fdef) fundefs in
+     List.fold_left (fun (cdefs, ctx) def -> let cdefs', ctx = compile_def ctx def in (cdefs @ cdefs', ctx)) ([], ctx) defs
 
   | def ->
      c_error ("Could not compile:\n" ^ Pretty_print_sail.to_string (Pretty_print_sail.doc_def def))
@@ -3274,8 +3278,9 @@ let compile_ast ctx (Defs defs) =
     in
 
     let postamble = separate hardline (List.map string
-       ( [ "int main(void)";
+       ( [ "int main(int argc, char *argv[])";
            "{";
+           "  if (argc > 1) { load_image(argv[1]); }";
            "  setup_library();" ]
        @ fst exn_boilerplate
        @ startup cdefs
@@ -3288,7 +3293,7 @@ let compile_ast ctx (Defs defs) =
        @ finish cdefs
        @ snd exn_boilerplate
        @ [ "  cleanup_library();";
-           "  return 0;";
+           "  return EXIT_SUCCESS;";
            "}" ] ))
     in
 
