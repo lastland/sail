@@ -372,6 +372,10 @@ let value_putchar = function
      V_unit
   | _ -> failwith "value putchar"
 
+let value_zeros = function
+  | [n] -> mk_vector (Sail_lib.zeros (coerce_int n))
+  | _ -> failwith "value zeros"
+
 let value_print_bits = function
   | [msg; bits] -> output_endline (coerce_string msg ^ string_of_value bits); V_unit
   | _ -> failwith "value print_bits"
@@ -401,6 +405,7 @@ let primops =
       ("eq_list", value_eq_list);
       ("eq_string", value_eq_string);
       ("eq_anything", value_eq_anything);
+      ("eq_bit", value_eq_anything);
       ("length", value_length);
       ("subrange", value_subrange);
       ("access", value_access);
@@ -432,6 +437,7 @@ let primops =
       ("add_vec_int", value_add_vec_int);
       ("add_vec", value_add_vec);
       ("sub_vec", value_sub_vec);
+      ("zeros", value_zeros);
       ("read_ram", value_read_ram);
       ("write_ram", value_write_ram);
       ("undefined_unit", fun _ -> V_unit);

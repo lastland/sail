@@ -12,7 +12,7 @@ val UInt = {
   lem: "uint",
   interpreter: "uint",
   c: "sail_uint"
-} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+} : forall 'n. bits('n) -> {'m, 0 <= 'm <= 2 ^ 'n - 1. atom('m)}
 
 
 val a : {|8,16,32|} -> int

@@ -38,4 +38,6 @@ val mult_int = {ocaml: "mult", lem: "integerMult", c: "mult_int"} : (int, int) -
 
 overload operator * = {mult_atom, mult_int}
 
+val "print_int" : (string, int) -> unit
+
 $endif

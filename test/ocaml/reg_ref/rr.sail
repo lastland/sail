@@ -53,8 +53,8 @@ val slice_slice : forall 'n 'm 'o 'p, 'm <= 'o & 'o - 'p <= 'n.
 function slice_slice (MkSlice(start, v), to, from) = MkSlice(from, v[to - start .. from - start])
 
 /* We can update a bitvector from another bitvector or a slice */
-val _set_slice : forall 'n 'm 'o, 0 <= 'm <= 'o <= 'n.
-  (ref(bits('n)), atom('o), atom('m), bits('o - ('m - 1))) -> unit
+val _set_slice : forall 'n 'm 'o 'p, 0 <= 'm <= 'o <= 'n & 'p = 'o - ('m - 1).
+  (ref(bits('n)), atom('o), atom('m), bits('p)) -> unit
 
 function _set_slice (v, stop, start, update) = {
   v2 = deref(v);
@@ -62,8 +62,8 @@ function _set_slice (v, stop, start, update) = {
   (*v) = v2;
 }
 
-val _set_slice2 : forall 'n 'm 'o 'p, 0 <= 'm <= 'o <= 'n.
-  (ref(bits('n)), atom('o), atom('m), slice('p, 'o - ('m - 1))) -> unit
+val _set_slice2 : forall 'n 'm 'o 'p 'q, 0 <= 'm <= 'o <= 'n & 'q = 'o - ('m - 1).
+  (ref(bits('n)), atom('o), atom('m), slice('p, 'q)) -> unit
 
 function _set_slice2 (v, stop, start, MkSlice(_, update)) = _set_slice(v, stop, start, update)
 

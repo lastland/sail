@@ -240,12 +240,12 @@ let rewrite_trivial_sizeof, rewrite_trivial_sizeof_exp =
   let rec split_nexp (Nexp_aux (nexp_aux, l) as nexp) =
     match nexp_aux with
     | Nexp_sum (n1, n2) ->
-       mk_exp (E_app (mk_id "add_range", [split_nexp n1; split_nexp n2]))
+       mk_exp (E_app (mk_id "add_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_minus (n1, n2) ->
-       mk_exp (E_app (mk_id "sub_range", [split_nexp n1; split_nexp n2]))
+       mk_exp (E_app (mk_id "sub_atom", [split_nexp n1; split_nexp n2]))
     | Nexp_times (n1, n2) ->
-       mk_exp (E_app (mk_id "mult_range", [split_nexp n1; split_nexp n2]))
-    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_range", [split_nexp nexp]))
+       mk_exp (E_app (mk_id "mult_atom", [split_nexp n1; split_nexp n2]))
+    | Nexp_neg nexp -> mk_exp (E_app (mk_id "negate_atom", [split_nexp nexp]))
     | _ -> mk_exp (E_sizeof nexp)
   in
   let rec rewrite_e_aux split_sizeof (E_aux (e_aux, (l, _)) as orig_exp) =
@@ -1389,7 +1389,7 @@ let rewrite_defs_remove_numeral_pats =
     let pat,guard,exp,a = destruct_pexp (Pat_aux (pexp_aux, a)) in
     let guard',pat = match guard_pat pat with
       | Some g, pat ->
-         let pat, env = bind_pat_no_guard (env_of exp) (strip_pat pat) (pat_typ_of pat) in
+         let pat, env = bind_pat_no_guard (pat_env_of pat) (strip_pat pat) (pat_typ_of pat) in
          Some (check_exp env (strip_exp g) (typ_of g)), pat
       | None, pat -> None, pat in
     match compose_guard_opt guard guard' with
@@ -1827,9 +1827,11 @@ let rewrite_fix_val_specs (Defs defs) =
     let vs, eff = match find_vs (env_of_annot (l, annot)) val_specs id with
       | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
          let eff' = union_effects eff (effect_of exp) in
+         (*
          let args_t' = rewrite_typ_nexp_ids (env_of exp) (pat_typ_of pat) in
          let ret_t' = rewrite_typ_nexp_ids (env_of exp) (typ_of exp) in
-         (tq, Typ_aux (Typ_fn (args_t', ret_t', eff'), a)), eff'
+          *)
+         (tq, Typ_aux (Typ_fn (args_t, ret_t, eff'), a)), eff'
       | _ -> assert false (* find_vs must return a function type *)
     in
     let annot = add_effect_annot annot eff in
@@ -3002,7 +3004,7 @@ let rewrite_defs_lem = [
   ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
   ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
   ("merge function clauses", merge_funcls);
-  ("recheck_defs", recheck_defs)
+  ("recheck_defs", recheck_defs);
   ]
 
 let rewrite_defs_ocaml = [
@@ -3014,6 +3016,7 @@ let rewrite_defs_ocaml = [
   ("simple_assignments", rewrite_simple_assignments);
   ("remove_vector_concat", rewrite_defs_remove_vector_concat);
   ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+  ("remove_numeral_pats", rewrite_defs_remove_numeral_pats);
   ("exp_lift_assign", rewrite_defs_exp_lift_assign);
   ("top_sort_defs", top_sort_defs);
   ("constraint", rewrite_constraint);

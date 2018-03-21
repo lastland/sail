@@ -969,7 +969,7 @@ let rec undefined_of_typ mwords l annot (Typ_aux (typ_aux, _) as typ) =
         initial_check.ml. i.e. the rewriter should only encounter this
         case when re-writing those functions. *)
      wrap (E_id (prepend_id "typ_" (id_of_kid kid))) typ
-  | Typ_fn _ | Typ_exist _ -> assert false (* Typ_exist should be re-written *)
+  | Typ_fn _ | Typ_exist _ -> failwith ("Tried to create undefined " ^ string_of_typ typ) (* Typ_exist should be re-written *)
 and undefined_of_typ_args mwords l annot (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> [E_aux (E_sizeof n, (l, annot (atom_typ n)))]

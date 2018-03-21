@@ -4,7 +4,7 @@ val print = "print_endline" : string -> unit
 val print_int = "print_int" : (string, int) -> unit
 
 union exception = {
-  Epair : (range(0, 255), range(0, 255)),
+  Epair : (atom(42), atom(24)),
   Eunknown : unit,
   Estring : string
 }
@@ -40,7 +40,7 @@ function main () = {
   try () catch {
     _ => print("Unreachable!")
   };
-  try throw(Epair(33, 1)) catch {
+  try throw(Epair(42, 24)) catch {
     Epair(x, _)  => {
       print("2nd try Caught Epair");
       print_int("x = ", x);

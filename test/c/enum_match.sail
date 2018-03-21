@@ -1,7 +1,4 @@
-
-val "eq_anything" : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator == = {eq_anything}
+$include <flow.sail>
 
 val print = "print_endline" : string -> unit
 

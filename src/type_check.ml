@@ -628,7 +628,7 @@ end = struct
          incr counter;
          Nexp_aux (Nexp_var kid, l)
     in
-    let typ = map_nexps simplify_nexp typ in
+    let typ = map_nexps (fun nexp -> simplify_nexp (nexp_simp nexp)) typ in
     let existentials = KBindings.bindings !complex_nexps |> List.map fst in
     let constrs = List.fold_left (fun ncs (kid, nexp) -> nc_eq (nvar kid) nexp :: ncs) [] (KBindings.bindings !complex_nexps) in
     existentials, constrs, typ
@@ -1516,6 +1516,7 @@ let rec unify l env typ1 typ2 =
   match destruct_exist env typ2 with
   | Some (kids, nc, typ2) ->
      let typ1, typ2 = Env.expand_synonyms env typ1, Env.expand_synonyms env typ2 in
+     let env = add_existential l kids nc env in (* TODO: Check this *)
      let (unifiers, _, _) = unify l env typ1 typ2 in
      typ_debug (string_of_list ", " (fun (kid, uvar) -> string_of_kid kid ^ " => " ^ string_of_uvar uvar) (KBindings.bindings unifiers));
      unifiers, kids, Some nc
