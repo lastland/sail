@@ -1654,7 +1654,12 @@ let split_defs all_errors splits defs =
             P_aux (P_lit lit,(l,annot)),
             [var,E_aux (E_lit lit,(new_l,annot))],[],[]) lits
        | _ ->
-          cannot ("length not constant, " ^ string_of_nexp len)
+          begin match solve env len with
+          | Some sz ->
+             cannot ("z3 constant")
+          | _ ->
+             cannot ("length not constant, " ^ string_of_nexp len ^ " in type " ^ string_of_typ typ)
+          end
        )
     (* set constrained numbers *)
     | Typ_app (Id_aux (Id "atom",_), [Typ_arg_aux (Typ_arg_nexp (Nexp_aux (value,_) as nexp),_)]) ->
