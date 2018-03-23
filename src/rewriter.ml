@@ -120,7 +120,7 @@ let union_eff_exps es =
 let fun_app_effects id env =
   try
     match Env.get_val_spec id env with
-    | (_, Typ_aux (Typ_fn (_,_,feff), _)) -> feff
+    | (_, Typ_aux (Typ_fn (_,_,_,feff), _)) -> feff
     | _ -> no_effect
   with
   | _ -> no_effect

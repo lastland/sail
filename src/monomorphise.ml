@@ -134,7 +134,7 @@ let subst_src_typ substs t =
     | Typ_id _
     | Typ_var _
       -> ty
-    | Typ_fn (t1,t2,e) -> re (Typ_fn (s_styp substs t1, s_styp substs t2,e))
+    | Typ_fn (imp,t1,t2,e) -> re (Typ_fn (imp, s_styp substs t1, s_styp substs t2,e))
     | Typ_tup ts -> re (Typ_tup (List.map (s_styp substs) ts))
     | Typ_app (id,tas) -> re (Typ_app (id,List.map (s_starg substs) tas))
     | Typ_exist (kids,nc,t) ->
@@ -346,7 +346,7 @@ let rec contains_exist (Typ_aux (ty,_)) =
   | Typ_id _
   | Typ_var _
     -> false
-  | Typ_fn (t1,t2,_) -> contains_exist t1 || contains_exist t2
+  | Typ_fn (_,t1,t2,_) -> contains_exist t1 || contains_exist t2
   | Typ_tup ts -> List.exists contains_exist ts
   | Typ_app (_,args) -> List.exists contains_exist_arg args
   | Typ_exist _ -> true
@@ -503,7 +503,7 @@ let refine_constructor refinements l env id args =
   | (_,irefinements) -> begin
     let (_,constr_ty) = Env.get_val_spec id env in
     match constr_ty with
-    | Typ_aux (Typ_fn (constr_ty,_,_),_) -> begin
+    | Typ_aux (Typ_fn (_,constr_ty,_,_),_) -> begin
        let arg_ty = typ_of_args args in
        match Type_check.destruct_exist env constr_ty with
        | None -> None
@@ -2312,10 +2312,10 @@ let rewrite_size_parameters env (Defs defs) =
             let typschm = match typschm with
               | TypSchm_aux (TypSchm_ts (tq,typ),l) ->
                  let typ = match typ with
-                   | Typ_aux (Typ_fn (Typ_aux (Typ_tup ts,l),t2,eff),l2) ->
-                      Typ_aux (Typ_fn (Typ_aux (Typ_tup (mapat (replace_type env) to_change ts),l),t2,eff),l2)
-                   | Typ_aux (Typ_fn (typ,t2,eff),l2) ->
-                      Typ_aux (Typ_fn (replace_type env typ,t2,eff),l2)
+                   | Typ_aux (Typ_fn (imp,Typ_aux (Typ_tup ts,l),t2,eff),l2) ->
+                      Typ_aux (Typ_fn (imp,Typ_aux (Typ_tup (mapat (replace_type env) to_change ts),l),t2,eff),l2)
+                   | Typ_aux (Typ_fn (imp,typ,t2,eff),l2) ->
+                      Typ_aux (Typ_fn (imp,replace_type env typ,t2,eff),l2)
                    | _ -> replace_type env typ
                  in TypSchm_aux (TypSchm_ts (tq,typ),l)
             in
@@ -2836,7 +2836,7 @@ let rec analyse_exp fn_id env assigns (E_aux (e,(l,annot)) as exp) =
        let deps, assigns, r = non_det args in
        let (_,fn_typ) = Env.get_val_spec id (env_of_annot (l,annot)) in
        let fn_effect = match fn_typ with
-         | Typ_aux (Typ_fn (_,_,eff),_) -> eff
+         | Typ_aux (Typ_fn (_,_,_,eff),_) -> eff
          | _ -> Effect_aux (Effect_set [],Unknown)
        in
        let eff_dep = match fn_effect with
@@ -3792,7 +3792,7 @@ let add_bitvector_casts (Defs defs) =
   let rewrite_funcl (FCL_aux (FCL_Funcl (id,pexp),fcl_ann)) =
     let ret_typ =
       match typ_of_annot fcl_ann with
-      | Typ_aux (Typ_fn (_,ret,_),_) -> ret
+      | Typ_aux (Typ_fn (_,_,ret,_),_) -> ret
       | Typ_aux (_,l) as typ ->
          raise (Reporting_basic.err_unreachable l
                   ("Function clause must have function type: " ^ string_of_typ typ ^

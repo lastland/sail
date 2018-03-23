@@ -149,7 +149,7 @@ atyp_aux =  (* expressions of all kinds, to be translated to types, nats, orders
  | ATyp_dec (* decreasing (big-endian) *)
  | ATyp_default_ord (* default order for increasing or decreasing signficant bits *)
  | ATyp_set of (base_effect) list (* effect set *)
- | ATyp_fn of atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
+ | ATyp_fn of kid option * atyp * atyp * atyp (* Function type (first-order only in user code), last atyp is an effect *)
  | ATyp_wild
  | ATyp_tup of (atyp) list (* Tuple type *)
  | ATyp_app of id * (atyp) list (* type constructor application *)

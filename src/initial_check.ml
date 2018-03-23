@@ -179,9 +179,16 @@ let rec to_ast_typ (k_env : kind Envmap.t) (def_ord : order) (t: Parse_ast.atyp)
                               | K_infer -> k.k <- K_Typ; Typ_var v
                               | _ -> typ_error l "Required a variable with kind Type, encountered " None (Some v) (Some k))
                 | None -> typ_error l "Encountered an unbound variable" None (Some v) None)
-              | Parse_ast.ATyp_fn(arg,ret,efct) -> Typ_fn( (to_ast_typ k_env def_ord arg),
-                                                           (to_ast_typ k_env def_ord ret),
-                                                           (to_ast_effects k_env efct))
+              | Parse_ast.ATyp_fn(None, arg, ret, effect) ->
+                 Typ_fn(Imp_none,
+                        to_ast_typ k_env def_ord arg,
+                        to_ast_typ k_env def_ord ret,
+                        to_ast_effects k_env effect)
+              | Parse_ast.ATyp_fn(Some kid, arg, ret, effect) ->
+                 Typ_fn(Imp_var (to_ast_var kid),
+                        to_ast_typ k_env def_ord arg,
+                        to_ast_typ k_env def_ord ret,
+                        to_ast_effects k_env effect)
               | Parse_ast.ATyp_tup(typs) -> Typ_tup( List.map (to_ast_typ k_env def_ord) typs)
 	      | Parse_ast.ATyp_app(Parse_ast.Id_aux(Parse_ast.Id "vector_sugar_tb",il), [ b; r; ord ; ti]) ->
 		let make_r bot top =
@@ -999,11 +1006,11 @@ let quant_item_arg = function
 let undefined_typschm id typq =
   let qis = quant_items typq in
   if qis = [] then
-    mk_typschm typq (mk_typ (Typ_fn (unit_typ, mk_typ (Typ_id id), mk_effect [BE_undef])))
+    mk_typschm typq (mk_typ (Typ_fn (Imp_none, unit_typ, mk_typ (Typ_id id), mk_effect [BE_undef])))
   else
     let arg_typ = mk_typ (Typ_tup (List.concat (List.map quant_item_typ qis))) in
     let ret_typ = app_typ id (List.concat (List.map quant_item_arg qis)) in
-    mk_typschm typq (mk_typ (Typ_fn (arg_typ, ret_typ, mk_effect [BE_undef])))
+    mk_typschm typq (mk_typ (Typ_fn (Imp_none, arg_typ, ret_typ, mk_effect [BE_undef])))
 
 let have_undefined_builtins = ref false
 

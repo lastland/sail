@@ -122,12 +122,16 @@ let doc_ord (Ord_aux(o,_)) = match o with
   | Ord_inc -> string "inc"
   | Ord_dec -> string "dec"
 
+let doc_implicit = function
+  | Imp_var kid -> string "implicit" ^^ parens (doc_var kid) ^^ space
+  | Imp_none -> empty
+
 let doc_typ, doc_atomic_typ, doc_nexp, doc_nexp_constraint =
   (* following the structure of parser for precedence *)
   let rec typ ty = fn_typ ty
   and fn_typ ((Typ_aux (t, _)) as ty) = match t with
-  | Typ_fn(arg,ret,efct) ->
-      separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
+  | Typ_fn(imp, arg,ret,efct) ->
+      doc_implicit imp ^^ separate space [tup_typ arg; arrow; fn_typ ret; string "effect"; doc_effects efct]
   | _ -> tup_typ ty
   and tup_typ ((Typ_aux (t, _)) as ty) = match t with
   | Typ_exist (kids, nc, ty) ->

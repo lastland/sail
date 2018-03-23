@@ -245,56 +245,33 @@ effect :: 'Effect_' ::=
 
 % TODO: are we going to need any effect polymorphism?  Conceivably for built-in maps and folds.  Yes.  But we think we don't need any interesting effect-set expressions, eg effectset-variable union {rreg}. 
 
+implicit :: 'Imp_' ::=
+  {{ com implicit function parameter }}
+  | implicitkw ( kid ) :: :: var
+  |                    :: :: none
+
 typ :: 'Typ_' ::=
   {{ com type expressions, of kind $[[Type]]$ }}
   {{ aux _ l }}
-  | id                                         :: :: id
+  | id                                          :: :: id
     {{ com defined type }}
   | kid                                         :: :: var
     {{ com type variable }}
-  | typ1 -> typ2 effectkw effect                        :: :: fn
+  | implicit typ1 -> typ2 effectkw effect       :: :: fn
     {{ com Function (first-order only in user code) }}
-% TODO: build first-order restriction into AST or just into type rules? neither - see note
-% TODO: concrete syntax for effects in a function type?  needed only for pp, not in user syntax.
-  | ( typ1 , .... , typn )                          :: :: tup
+  | ( typ1 , .... , typn )                      :: :: tup
     {{ com Tuple }}
   | exist kid1 , .. , kidn , n_constraint . typ :: :: exist
-% TODO union in the other kind grammars?  or make a syntax of argument? or glom together the grammars and leave o the typechecker
-  | id < typ_arg1 , .. , typ_argn >                    :: :: app
-  {{ com type constructor application }}
-  | ( typ )                            :: S :: paren {{ ichlo [[typ]] }} 
-%  | range < nexp1, nexp2> :: :: range  {{ com natural numbers [[nexp2]] .. [[nexp2]]+[[nexp1]]-1 }}
-  | [| nexp |]             :: S :: range1 {{ichlo range <[[nexp]], 0> }} {{ com sugar for \texttt{range<0, nexp>} }}
-  | [| nexp : nexp' |]  :: S :: range2 {{ichlo range <[[nexp]],[[nexp']]> }} {{ com sugar for \texttt{range< nexp, nexp'>} }}
-% | atom < nexp > :: :: atom {{ com equivalent to range<nexp,nexp> }}
-  | [: nexp :]            :: S :: atom1 {{ichlo atom <[[nexp]]> }} {{ com sugar for \texttt{atom<nexp>}=\texttt{range<nexp,nexp>} }}
-% use .. not - to avoid ambiguity with nexp -
-% total maps and vectors indexed by finite subranges of nat
-%  | vector nexp1 nexp2 order typ :: :: vector {{ com vector of [[typ]], indexed by natural range }}
-% probably some sugar for vector types, using [ ] similarly to enums:
-% (but with .. not : in the former, to avoid confusion...)
-  | typ [ nexp ]  :: S :: vector2 {{ichlo vector < [[nexp]],0,inc,[[typ]] > }} 
-{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$ \texttt{|]} }}
-  | typ [ nexp : nexp' ] :: S :: vector3 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} 
-{{ com sugar for vector indexed by \texttt{[|} $[[nexp]]$..$[[nexp']]$ \texttt{|]} }}
-  | typ [ nexp <: nexp' ] :: S :: vector4 {{ ichlo vector < [[nexp]],[[nexp']],inc,[[typ]] }} {{ com sugar for increasing vector }}
-  | typ [ nexp :> nexp' ] :: S :: vector5 {{ ichlo vector < [[nexp]],[[nexp']],dec,[[typ]] }} {{ com sugar for decreasing vector }}
-%  | register [ id ] :: S :: register {{ ichlo (Typ_app Id "lteq_atom_atom") }}
-% ...so bit [ nexp ] etc is just an instance of that
-%  | List < typ > :: :: list {{ com list of [[typ]] }}
-%  | Set < typ >  :: :: set  {{ com finite set of [[typ]] }}
-%  | Reg < typ > :: :: reg  {{ com mutable register components holding [[typ]] }}
-% "reg t" is basically the ML "t ref" 
-% not sure how first-class it should be, though
-% use "reg word32" etc for the types of vanilla registers 
+  | id ( typ_arg1 , .. , typ_argn )             :: :: app
+    {{ com type constructor application }}
+  | ( typ )                                     :: S :: paren {{ ichlo [[typ]] }}
 
- 
 typ_arg :: 'Typ_arg_' ::=
   {{ com type constructor arguments of all kinds }}
-  {{ aux _ l }} 
-  | nexp       :: :: nexp
-  | typ        :: :: typ
-  | order     :: :: order
+  {{ aux _ l }}
+  | nexp  :: :: nexp
+  | typ   :: :: typ
+  | order :: :: order
 
 % plus more for l-value/r-value pairs, as introduced by the L3 'compound' declarations   ... ref typ
 
@@ -1194,6 +1171,8 @@ terminals :: '' ::=
   | --                                  :: :: dashdash
     {{ tex \mbox{--} }}
   | effectkw				:: :: effectkw
+    {{ tex \ottkw{effect} }}
+  | implicitkw				:: :: implicitkw
     {{ tex \ottkw{effect} }}
   | empty                               :: :: empty
     {{ tex \ensuremath{\epsilon} }}

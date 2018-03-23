@@ -158,7 +158,7 @@ let rec desugar_rchain chain s e =
 %token Pure Register Return Scattered Sizeof Struct Then True TwoCaret TYPE Typedef
 %token Undefined Union Newtype With Val Constraint Throw Try Catch Exit Bitfield
 %token Barr Depend Rreg Wreg Rmem Rmemt Wmem Wmv Wmvt Eamem Exmem Undef Unspec Nondet Escape
-%token Repeat Until While Do Mutual Var Ref
+%token Repeat Until While Do Mutual Var Ref Implicit
 
 %nonassoc Then
 %nonassoc Else
@@ -627,13 +627,17 @@ effect_set:
 
 typschm:
   | typ MinusGt typ
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn (None, $1, $3, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ MinusGt typ
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn (None, $4, $6, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot Implicit Lparen kid Rparen typ MinusGt typ
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn (Some $6, $8, $10, mk_typ (ATyp_set []) s e)) s e) s e) $startpos $endpos }
   | typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn ($1, $3, $5)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm mk_typqn (mk_typ (ATyp_fn (None, $1, $3, $5)) s e) s e) $startpos $endpos }
   | Forall typquant Dot typ MinusGt typ Effect effect_set
-    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn ($4, $6, $8)) s e) s e) $startpos $endpos }
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn (None, $4, $6, $8)) s e) s e) $startpos $endpos }
+  | Forall typquant Dot Implicit Lparen kid Rparen typ MinusGt typ Effect effect_set
+    { (fun s e -> mk_typschm $2 (mk_typ (ATyp_fn (Some $6, $8, $10, $12)) s e) s e) $startpos $endpos }
 
 typschm_eof:
   | typschm Eof

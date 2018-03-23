@@ -272,7 +272,7 @@ let bool_typ = mk_id_typ (mk_id "bool")
 let string_typ = mk_id_typ (mk_id "string")
 let list_typ typ = mk_typ (Typ_app (mk_id "list", [mk_typ_arg (Typ_arg_typ typ)]))
 let tuple_typ typs = mk_typ (Typ_tup typs)
-let function_typ typ1 typ2 eff = mk_typ (Typ_fn (typ1, typ2, eff))
+let function_typ typ1 typ2 eff = mk_typ (Typ_fn (Imp_none, typ1, typ2, eff))
 
 let vector_typ n ord typ =
   mk_typ (Typ_app (mk_id "vector",
@@ -560,7 +560,7 @@ and string_of_typ_aux = function
   | Typ_var kid -> string_of_kid kid
   | Typ_tup typs -> "(" ^ string_of_list ", " string_of_typ typs ^ ")"
   | Typ_app (id, args) -> string_of_id id ^ "(" ^ string_of_list ", " string_of_typ_arg args ^ ")"
-  | Typ_fn (typ_arg, typ_ret, eff) ->
+  | Typ_fn (_, typ_arg, typ_ret, eff) ->
      string_of_typ typ_arg ^ " -> " ^ string_of_typ typ_ret ^ " effect " ^ string_of_effect eff
   | Typ_exist (kids, nc, typ) ->
      "{" ^ string_of_list " " string_of_kid kids ^ ", " ^ string_of_n_constraint nc ^ ". " ^ string_of_typ typ ^ "}"
@@ -929,7 +929,7 @@ let rec tyvars_of_typ (Typ_aux (t,_)) =
   match t with
   | Typ_id _ -> KidSet.empty
   | Typ_var kid -> KidSet.singleton kid
-  | Typ_fn (t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
+  | Typ_fn (_,t1,t2,_) -> KidSet.union (tyvars_of_typ t1) (tyvars_of_typ t2)
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts

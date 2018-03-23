@@ -216,7 +216,7 @@ let rec typ_subst_nexp sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_nexp_aux
 and typ_subst_nexp_aux sv subst = function
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
+  | Typ_fn (imp, typ1, typ2, effs) -> Typ_fn (imp, typ_subst_nexp sv subst typ1, typ_subst_nexp sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_nexp sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_nexp sv subst) args)
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
@@ -231,7 +231,7 @@ let rec typ_subst_typ sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_typ_aux s
 and typ_subst_typ_aux sv subst = function
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then subst else Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
+  | Typ_fn (imp, typ1, typ2, effs) -> Typ_fn (imp, typ_subst_typ sv subst typ1, typ_subst_typ sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_typ sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_typ sv subst) args)
   | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_typ sv subst typ)
@@ -252,7 +252,7 @@ let rec typ_subst_order sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_order_a
 and typ_subst_order_aux sv subst = function
   | Typ_id v -> Typ_id v
   | Typ_var kid -> Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
+  | Typ_fn (imp, typ1, typ2, effs) -> Typ_fn (imp, typ_subst_order sv subst typ1, typ_subst_order sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_order sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_order sv subst) args)
   | Typ_exist (kids, nc, typ) -> Typ_exist (kids, nc, typ_subst_order sv subst typ)
@@ -266,7 +266,10 @@ let rec typ_subst_kid sv subst (Typ_aux (typ, l)) = Typ_aux (typ_subst_kid_aux s
 and typ_subst_kid_aux sv subst = function
   | Typ_id v -> Typ_id v
   | Typ_var kid -> if Kid.compare kid sv = 0 then Typ_var subst else Typ_var kid
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
+  | Typ_fn (Imp_var kid, typ1, typ2, effs) when Kid.compare kid sv = 0 ->
+     Typ_fn (Imp_var subst, typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
+  | Typ_fn (imp, typ1, typ2, effs) ->
+     Typ_fn (imp, typ_subst_kid sv subst typ1, typ_subst_kid sv subst typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map (typ_subst_kid sv subst) typs)
   | Typ_app (f, args) -> Typ_app (f, List.map (typ_subst_arg_kid sv subst) args)
   | Typ_exist (kids, nc, typ) when KidSet.mem sv (KidSet.of_list kids) -> Typ_exist (kids, nc, typ)
@@ -555,7 +558,7 @@ end = struct
   let rec expand_synonyms env (Typ_aux (typ, l) as t) =
     match typ with
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (expand_synonyms env) typs), l)
-    | Typ_fn (typ1, typ2, effs) -> Typ_aux (Typ_fn (expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
+    | Typ_fn (imp, typ1, typ2, effs) -> Typ_aux (Typ_fn (imp, expand_synonyms env typ1, expand_synonyms env typ2, effs), l)
     | Typ_app (id, args) ->
        begin
          try
@@ -606,7 +609,7 @@ end = struct
   let rec map_nexps f (Typ_aux (typ_aux, l) as typ) =
     match typ_aux with
     | Typ_id _ | Typ_var _ -> typ
-    | Typ_fn (arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
+    | Typ_fn (imp, arg_typ, ret_typ, effect) -> Typ_aux (Typ_fn (imp, map_nexps f arg_typ, map_nexps f ret_typ, effect), l)
     | Typ_tup typs -> Typ_aux (Typ_tup (List.map (map_nexps f) typs), l)
     | Typ_exist (kids, nc, typ) -> Typ_aux (Typ_exist (kids, nc, map_nexps f typ), l)
     | Typ_app (id, args) -> Typ_aux (Typ_app (id, List.map (map_nexps_arg f) args), l)
@@ -646,8 +649,8 @@ end = struct
 
   let rec canonicalize env typ =
     match typ with
-    | Typ_aux (Typ_fn (arg_typ, ret_typ, effects), l) when is_canonical env arg_typ ->
-       Typ_aux (Typ_fn (arg_typ, canonicalize env ret_typ, effects), l)
+    | Typ_aux (Typ_fn (imp, arg_typ, ret_typ, effects), l) when is_canonical env arg_typ ->
+       Typ_aux (Typ_fn (imp, arg_typ, canonicalize env ret_typ, effects), l)
     | Typ_aux (Typ_fn _, l) -> typ_error l ("Function type " ^ string_of_typ typ ^ " is not canonical")
     | _ ->
        let existentials, constrs, (Typ_aux (typ_aux, l) as typ) = canonical env typ in
@@ -675,7 +678,8 @@ end = struct
     | Typ_id id -> typ_error l ("Undefined type " ^ string_of_id id)
     | Typ_var kid when KBindings.mem kid env.typ_vars -> ()
     | Typ_var kid -> typ_error l ("Unbound kind identifier " ^ string_of_kid kid ^ " in type " ^ string_of_typ typ)
-    | Typ_fn (typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
+    (* FIXME check implicit *)
+    | Typ_fn (_, typ_arg, typ_ret, effs) -> wf_typ ~exs:exs env typ_arg; wf_typ ~exs:exs env typ_ret
     | Typ_tup typs -> List.iter (wf_typ ~exs:exs env) typs
     | Typ_app (id, args) when bound_typ_id env id ->
        List.iter (wf_typ_arg ~exs:exs env) args;
@@ -823,7 +827,7 @@ end = struct
           | args -> mk_typ (Typ_app (id, args))
         in
         let fold_accessors accs (typ, fid) =
-          let acc_typ = mk_typ (Typ_fn (rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          let acc_typ = mk_typ (Typ_fn (Imp_none, rectyp, typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           typ_print (indent 1 ^ "Adding accessor " ^ string_of_id id ^ "." ^ string_of_id fid ^ " :: " ^ string_of_bind (typq, acc_typ));
           Bindings.add (field_name id fid) (typq, acc_typ) accs
         in
@@ -839,7 +843,7 @@ end = struct
 
   let get_accessor rec_id id env =
     match get_accessor_fn rec_id id env with
-    | (typq, Typ_aux (Typ_fn (rec_typ, field_typ, effect), _)) ->
+    | (typq, Typ_aux (Typ_fn (Imp_none, rec_typ, field_typ, effect), _)) ->
        (typq, rec_typ, field_typ, effect)
     | _ -> typ_error (id_loc id) ("Accessor with non-function type found for " ^ string_of_id (field_name rec_id id))
 
@@ -1016,8 +1020,8 @@ end = struct
     let rec aux (Typ_aux (t,a)) =
       let rewrap t = Typ_aux (t,a) in
       match t with
-      | Typ_fn (t1, t2, eff) ->
-        rewrap (Typ_fn (aux t1, aux t2, eff))
+      | Typ_fn (imp, t1, t2, eff) ->
+        rewrap (Typ_fn (imp, aux t1, aux t2, eff))
       | Typ_tup ts ->
         rewrap (Typ_tup (List.map aux ts))
       | Typ_app (r, [Typ_arg_aux (Typ_arg_typ rtyp,_)])
@@ -1138,7 +1142,7 @@ let rec is_typ_monomorphic (Typ_aux (typ, _)) =
   | Typ_id _ -> true
   | Typ_tup typs -> List.for_all is_typ_monomorphic typs
   | Typ_app (id, args) -> List.for_all is_typ_arg_monomorphic args
-  | Typ_fn (typ1, typ2, _) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
+  | Typ_fn (_, typ1, typ2, _) -> is_typ_monomorphic typ1 && is_typ_monomorphic typ2
   | Typ_exist _ | Typ_var _ -> false
 and is_typ_arg_monomorphic (Typ_arg_aux (arg, _)) =
   match arg with
@@ -1287,7 +1291,7 @@ let rec typ_nexps (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.concat (List.map typ_nexps typs)
   | Typ_app (f, args) -> List.concat (List.map typ_arg_nexps args)
   | Typ_exist (kids, nc, typ) -> typ_nexps typ
-  | Typ_fn (typ1, typ2, _) ->
+  | Typ_fn (_, typ1, typ2, _) ->
      typ_nexps typ1 @ typ_nexps typ2
 and typ_arg_nexps (Typ_arg_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
@@ -1303,7 +1307,7 @@ let rec typ_frees ?exs:(exs=KidSet.empty) (Typ_aux (typ_aux, l)) =
   | Typ_tup typs -> List.fold_left KidSet.union KidSet.empty (List.map (typ_frees ~exs:exs) typs)
   | Typ_app (f, args) -> List.fold_left KidSet.union KidSet.empty (List.map (typ_arg_frees ~exs:exs) args)
   | Typ_exist (kids, nc, typ) -> typ_frees ~exs:(KidSet.of_list kids) typ
-  | Typ_fn (typ1, typ2, _) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
+  | Typ_fn (_, typ1, typ2, _) -> KidSet.union (typ_frees ~exs:exs typ1) (typ_frees ~exs:exs typ2)
 and typ_arg_frees ?exs:(exs=KidSet.empty) (Typ_arg_aux (typ_arg_aux, l)) =
   match typ_arg_aux with
   | Typ_arg_nexp n -> nexp_frees ~exs:exs n
@@ -1601,7 +1605,7 @@ let rec alpha_equivalent env typ1 typ2 =
     let relabelled_aux =
       match aux with
       | Typ_id _ | Typ_var _ -> aux
-      | Typ_fn (typ1, typ2, eff) -> Typ_fn (relabel typ1, relabel typ2, eff)
+      | Typ_fn (imp, typ1, typ2, eff) -> Typ_fn (imp, relabel typ1, relabel typ2, eff)
       | Typ_tup typs -> Typ_tup (List.map relabel typs)
       | Typ_exist (kids, nc, typ) ->
          let (kids, kids') = kid_order (KidSet.of_list kids) typ in
@@ -1970,7 +1974,7 @@ let rec filter_casts env from_typ to_typ casts =
      begin
        let (quant, cast_typ) = Env.get_val_spec cast env in
        match cast_typ with
-       | Typ_aux (Typ_fn (cast_from_typ, cast_to_typ, _), _)
+       | Typ_aux (Typ_fn (Imp_none, cast_from_typ, cast_to_typ, _), _)
             when similar_typ env from_typ cast_from_typ && similar_typ env to_typ cast_to_typ ->
           typ_print ("Considering cast " ^ string_of_typ cast_typ ^ " for " ^ string_of_typ from_typ ^ " to " ^ string_of_typ to_typ);
           cast :: filter_casts env from_typ to_typ casts
@@ -2135,9 +2139,14 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
-  | E_app (f, [E_aux (E_cast (typ2, E_aux (E_cast (typ1, exp), _)), _)]), _ when Id.compare f (mk_id"__subtype") = 0 ->
+  | E_app (f, [E_aux (E_cast (typ2, E_aux (E_cast (typ1, exp), _)), _)]), _ when Id.compare f (mk_id "__subtype") = 0 ->
      subtyp l env typ1 typ2;
      annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+  | E_app (f, [E_aux (E_cast (typ2, E_aux (E_cast (typ1, exp), _)), _)]), _ when Id.compare f (mk_id "__not_subtype") = 0 ->
+     begin
+       try subtyp l env typ1 typ2; failwith "subtyping assertion failed" with
+       | Type_error _ -> annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+     end
 
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
@@ -2417,7 +2426,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
          | _ -> [typ]
        in
        match Env.expand_synonyms env ctor_typ with
-       | Typ_aux (Typ_fn (arg_typ, ret_typ, _), _) ->
+       | Typ_aux (Typ_fn (Imp_none, arg_typ, ret_typ, _), _) ->
           begin
             try
               typ_debug ("Unifying " ^ string_of_bind (typq, ctor_typ) ^ " for pattern " ^ string_of_typ typ);
@@ -2437,7 +2446,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) typ =
             with
             | Unification_error (l, m) -> typ_error l ("Unification error when pattern matching against union constructor: " ^ m)
           end
-       | _ -> typ_error l ("Mal-formed constructor " ^ string_of_id f)
+       | _ -> typ_error l ("Malformed constructor " ^ string_of_id f)
      end
   | P_app (f, _) when not (Env.is_union_constructor f env) ->
      typ_error l (string_of_id f ^ " is not a union constructor in pattern " ^ string_of_pat pat)
@@ -3033,10 +3042,10 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
     | (_, []), _ -> typ_error l ("Function " ^ string_of_id f ^ " applied to too many arguments")
     | _, (_, []) -> typ_error l ("Function " ^ string_of_id f ^ " not applied to enough arguments")
   in
-  let instantiate_ret env quants typs ret_typ =
+  let instantiate_ret imp env quants typs ret_typ =
     match ret_ctx_typ with
-    | None -> (quants, typs, ret_typ, env)
-    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env)
+    | None -> (quants, typs, ret_typ, None, env)
+    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, None, env)
     | Some rct ->
        begin
          typ_debug ("RCT is " ^ string_of_typ rct);
@@ -3056,16 +3065,32 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
            | None -> subst_unifiers unifiers ret_typ
            | Some nc -> mk_typ (Typ_exist (ex_kids, nc, subst_unifiers unifiers ret_typ))
          in
-         (quants', typs', ret_typ', env)
+         let imp' = match imp with
+           | Imp_none -> None
+           | Imp_var kid ->
+              try
+                match KBindings.find kid unifiers with
+                | U_nexp nexp -> Some nexp
+                | _ -> typ_error l "No unifier for implicit type"
+              with
+                Not_found -> typ_error l "No_unifier for implicit type"
+         in
+         (quants', typs', ret_typ', imp', env)
        end
   in
-  let (quants, typ_args, typ_ret, env), eff =
+  let (quants, typ_args, typ_ret, imp, env), eff =
+    (* FIXME: handle implicits *)
     match Env.expand_synonyms env f_typ with
-    | Typ_aux (Typ_fn (Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
-       instantiate_ret env (quant_items typq) typ_args typ_ret, eff
-    | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
-       instantiate_ret env (quant_items typq) [typ_arg] typ_ret, eff
+    | Typ_aux (Typ_fn (imp, Typ_aux (Typ_tup typ_args, _), typ_ret, eff), _) ->
+       instantiate_ret imp env (quant_items typq) typ_args typ_ret, eff
+    | Typ_aux (Typ_fn (imp, typ_arg, typ_ret, eff), _) ->
+       instantiate_ret imp env (quant_items typq) [typ_arg] typ_ret, eff
     | _ -> typ_error l (string_of_typ f_typ ^ " is not a function type")
+  in
+  let xs, typ_args = match imp with
+    | Some nexp when List.length xs = List.length typ_args -> mk_exp (E_sizeof nexp) :: xs, atom_typ nexp :: typ_args
+    | Some nexp -> xs, atom_typ nexp :: typ_args
+    | None -> xs, typ_args
   in
   let (xs_instantiated, typ_ret, env) = instantiate env quants ([], typ_args) typ_ret ([], number 0 xs) in
   let xs_reordered = List.map snd (List.sort (fun (n, _) (m, _) -> compare n m) xs_instantiated) in
@@ -3395,7 +3420,7 @@ let check_letdef orig_env (LB_aux (letbind, (l, _))) =
 
 let check_funcl env (FCL_aux (FCL_Funcl (id, pexp), (l, _))) typ =
   match typ with
-  | Typ_aux (Typ_fn (typ_arg, typ_ret, eff), _) ->
+  | Typ_aux (Typ_fn (_, typ_arg, typ_ret, eff), _) ->
      begin
        let env = Env.add_ret_typ typ_ret env in
        (* We want to forbid polymorphic undefined values in all cases,
@@ -3434,7 +3459,7 @@ let infer_funtyp l env tannotopt funcls =
        | [FCL_aux (FCL_Funcl (_, Pat_aux (pexp,_)), _)] ->
           let pat = match pexp with Pat_exp (pat,_) | Pat_when (pat,_,_) -> pat in
           let arg_typ = typ_from_pat pat in
-          let fn_typ = mk_typ (Typ_fn (arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
+          let fn_typ = mk_typ (Typ_fn (Imp_none, arg_typ, ret_typ, Effect_aux (Effect_set [], Parse_ast.Unknown))) in
           (quant, fn_typ)
        | _ -> typ_error l "Cannot infer function type for function with multiple clauses"
      end
@@ -3469,8 +3494,9 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
        let (quant, typ) = infer_funtyp l env tannotopt funcls in
        false, (quant, typ), env
   in
+  (* FIXME: implicit *)
   let vtyp_arg, vtyp_ret, declared_eff, vl = match typ with
-    | Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) -> vtyp_arg, vtyp_ret, declared_eff, vl
+    | Typ_aux (Typ_fn (_, vtyp_arg, vtyp_ret, declared_eff), vl) -> vtyp_arg, vtyp_ret, declared_eff, vl
     | _ -> typ_error l "Function val spec was not a function type"
   in
   check_tannotopt env quant vtyp_ret tannotopt;
@@ -3481,7 +3507,7 @@ let check_fundef env (FD_aux (FD_function (recopt, tannotopt, effectopt, funcls)
   let vs_def, env, declared_eff =
     if not have_val_spec
     then
-      let typ = Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, eff), vl) in
+      let typ = Typ_aux (Typ_fn (Imp_none, vtyp_arg, vtyp_ret, eff), vl) in
       [mk_val_spec quant typ id], Env.add_val_spec id (quant, Env.canonicalize env typ) env, eff
     else [], env, declared_eff
   in
@@ -3544,7 +3570,7 @@ let check_type_union env variant typq (Tu_aux (tu, l)) =
   let ret_typ = app_typ variant (List.fold_left fold_union_quant [] (quant_items typq)) in
   match tu with
   | Tu_ty_id (typ, v) ->
-     let typ' = mk_typ (Typ_fn (typ, ret_typ, no_effect)) in
+     let typ' = mk_typ (Typ_fn (Imp_none, typ, ret_typ, no_effect)) in
      env
      |> Env.add_union_id v (typq, typ')
      |> Env.add_val_spec v (typq, typ')

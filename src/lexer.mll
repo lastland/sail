@@ -129,6 +129,7 @@ let kw_table =
      ("foreach",                 (fun _ -> Foreach));
      ("function",                (fun x -> Function_));
      ("overload",                (fun _ -> Overload));
+     ("implicit",                (fun _ -> Implicit));
      ("throw",                   (fun _ -> Throw));
      ("try",                     (fun _ -> Try));
      ("catch",                   (fun _ -> Catch));

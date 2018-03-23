@@ -87,8 +87,8 @@ let nameset_bigunion = List.fold_left Nameset.union mt
 let rec free_type_names_t consider_var (Typ_aux (t, _)) = match t with
   | Typ_var name -> if consider_var then Nameset.add (string_of_kid name) mt else mt
   | Typ_id name -> Nameset.add (string_of_id name) mt
-  | Typ_fn (t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
-                                     (free_type_names_t consider_var t2)
+  | Typ_fn (_,t1,t2,_) -> Nameset.union (free_type_names_t consider_var t1)
+                                        (free_type_names_t consider_var t2)
   | Typ_tup ts -> free_type_names_ts consider_var ts
   | Typ_app (name,targs) -> Nameset.add (string_of_id name) (free_type_names_t_args consider_var targs)
   | Typ_exist (kids,_,t') -> List.fold_left (fun s kid -> Nameset.remove (string_of_kid kid) s) (free_type_names_t consider_var t') kids
@@ -115,7 +115,7 @@ let rec fv_of_typ consider_var bound used (Typ_aux (t,_)) : Nameset.t =
     then conditional_add_typ bound used (Ast.Id_aux (Ast.Id v,l))
     else used
   | Typ_id id -> conditional_add_typ bound used id
-  | Typ_fn(arg,ret,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used arg) ret
+  | Typ_fn(_,arg,ret,_) -> fv_of_typ consider_var bound (fv_of_typ consider_var bound used arg) ret
   | Typ_tup ts -> List.fold_right (fun t n -> fv_of_typ consider_var bound n t) ts used
   | Typ_app(id,targs) ->
      List.fold_right (fun ta n -> fv_of_targ consider_var bound n ta) targs (conditional_add_typ bound used id)

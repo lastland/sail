@@ -138,7 +138,7 @@ let rec pp_format_typ_lem (Typ_aux(t,l)) =
   (match t with
     | Typ_id(id) -> "(Typ_id " ^ pp_format_id_lem id ^ ")"
     | Typ_var(var) -> "(Typ_var " ^ pp_format_var_lem var ^ ")"
-    | Typ_fn(arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^
+    | Typ_fn(_, arg,ret,efct) -> "(Typ_fn " ^ pp_format_typ_lem arg ^ " " ^
                               pp_format_typ_lem ret ^ " " ^
                               (pp_format_effects_lem efct) ^ ")"
     | Typ_tup(typs) -> "(Typ_tup [" ^ (list_format "; " pp_format_typ_lem typs) ^ "])"

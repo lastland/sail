@@ -1125,8 +1125,8 @@ let cdef_ctyps ctx = function
   | CDEF_fundef (id, _, _, instrs) ->
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (Imp_none, Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (Imp_none, arg_typ, ret_typ, _) -> [arg_typ], ret_typ
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
@@ -1448,8 +1448,8 @@ let compile_funcall ctx id args typ =
 
   let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
   let arg_typs, ret_typ = match fn_typ with
-    | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-    | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+    | Typ_fn (_, Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+    | Typ_fn (_, arg_typ, ret_typ, _) -> [arg_typ], ret_typ
     | _ -> assert false
   in
   let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
@@ -2028,7 +2028,7 @@ let fix_exception_block ctx instrs =
        @ rewrite_exception (historic @ before) after
     | before, (I_aux (I_funcall (x, f, args, ctyp), _) as funcall) :: after ->
        let effects = match Env.get_val_spec f ctx.tc_env with
-         | _, Typ_aux (Typ_fn (_, _, effects), _) -> effects
+         | _, Typ_aux (Typ_fn (_, _, _, effects), _) -> effects
          | exception (Type_error _) -> no_effect (* nullary union constructor, so no val spec *)
          | _ -> assert false (* valspec must have function type *)
        in
@@ -2071,8 +2071,8 @@ let rec compile_def ctx = function
   | DEF_spec (VS_aux (VS_val_spec (_, id, _, _), _)) ->
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (_, Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (_, arg_typ, ret_typ, _) -> [arg_typ], ret_typ
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in
@@ -2089,7 +2089,7 @@ let rec compile_def ctx = function
      in
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typ, ret_typ = match fn_typ with
-       | Typ_fn (arg_typ, ret_typ, _) -> arg_typ, ret_typ
+       | Typ_fn (_, arg_typ, ret_typ, _) -> arg_typ, ret_typ
        | _ -> assert false
      in
      if is_stack_ctyp ctyp then
@@ -3113,8 +3113,8 @@ let codegen_def' ctx = function
      let instrs = add_local_labels instrs in
      let _, Typ_aux (fn_typ, _) = Env.get_val_spec id ctx.tc_env in
      let arg_typs, ret_typ = match fn_typ with
-       | Typ_fn (Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
-       | Typ_fn (arg_typ, ret_typ, _) -> [arg_typ], ret_typ
+       | Typ_fn (_, Typ_aux (Typ_tup arg_typs, _), ret_typ, _) -> arg_typs, ret_typ
+       | Typ_fn (_, arg_typ, ret_typ, _) -> [arg_typ], ret_typ
        | _ -> assert false
      in
      let arg_ctyps, ret_ctyp = List.map (ctyp_of_typ ctx) arg_typs, ctyp_of_typ ctx ret_typ in

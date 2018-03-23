@@ -185,8 +185,8 @@ let rec rewrite_nexp_ids env (Nexp_aux (nexp, l) as nexp_aux) = match nexp with
 
 let rewrite_defs_nexp_ids, rewrite_typ_nexp_ids =
   let rec rewrite_typ env (Typ_aux (typ, l) as typ_aux) = match typ with
-    | Typ_fn (arg_t, ret_t, eff) ->
-       Typ_aux (Typ_fn (rewrite_typ env arg_t, rewrite_typ env ret_t, eff), l)
+    | Typ_fn (imp, arg_t, ret_t, eff) ->
+       Typ_aux (Typ_fn (imp, rewrite_typ env arg_t, rewrite_typ env ret_t, eff), l)
     | Typ_tup ts ->
        Typ_aux (Typ_tup (List.map (rewrite_typ env) ts), l)
     | Typ_exist (kids, c, typ) ->
@@ -553,14 +553,14 @@ let rewrite_sizeof (Defs defs) =
         let kid_typs = List.map (fun kid -> atom_typ (nvar kid))
                                 (KidSet.elements (Bindings.find id params_map)) in
         let typ' = match typ with
-          | Typ_aux (Typ_fn (vtyp_arg, vtyp_ret, declared_eff), vl) ->
+          | Typ_aux (Typ_fn (imp, vtyp_arg, vtyp_ret, declared_eff), vl) ->
              let vtyp_arg' = begin
                  match vtyp_arg with
                  | Typ_aux (Typ_tup typs, vl) ->
                     Typ_aux (Typ_tup (kid_typs @ typs), vl)
                  | _ -> Typ_aux (Typ_tup (kid_typs @ [vtyp_arg]), vl)
                end in
-             Typ_aux (Typ_fn (vtyp_arg', vtyp_ret, declared_eff), vl)
+             Typ_aux (Typ_fn (imp, vtyp_arg', vtyp_ret, declared_eff), vl)
           | _ ->
             raise (Reporting_basic.err_typ l "val spec with non-function type") in
         TypSchm_aux (TypSchm_ts (tq, typ'), l)
@@ -1798,13 +1798,13 @@ let rewrite_fix_val_specs (Defs defs) =
   in
 
   let add_eff_to_vs eff = function
-    | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff'), a)) ->
-      (tq, Typ_aux (Typ_fn (args_t, ret_t, union_effects eff eff'), a))
+    | (tq, Typ_aux (Typ_fn (imp, args_t, ret_t, eff'), a)) ->
+      (tq, Typ_aux (Typ_fn (imp, args_t, ret_t, union_effects eff eff'), a))
     | vs -> vs
   in
 
   let eff_of_vs = function
-    | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) -> eff
+    | (tq, Typ_aux (Typ_fn (_, args_t, ret_t, eff), a)) -> eff
     | _ -> no_effect
   in
 
@@ -1825,13 +1825,13 @@ let rewrite_fix_val_specs (Defs defs) =
     (* Assumes there are no effects in guards *)
     let exp = propagate_exp_effect (rewrite_exp val_specs exp) in
     let vs, eff = match find_vs (env_of_annot (l, annot)) val_specs id with
-      | (tq, Typ_aux (Typ_fn (args_t, ret_t, eff), a)) ->
+      | (tq, Typ_aux (Typ_fn (imp, args_t, ret_t, eff), a)) ->
          let eff' = union_effects eff (effect_of exp) in
          (*
          let args_t' = rewrite_typ_nexp_ids (env_of exp) (pat_typ_of pat) in
          let ret_t' = rewrite_typ_nexp_ids (env_of exp) (typ_of exp) in
           *)
-         (tq, Typ_aux (Typ_fn (args_t, ret_t, eff'), a)), eff'
+         (tq, Typ_aux (Typ_fn (imp, args_t, ret_t, eff'), a)), eff'
       | _ -> assert false (* find_vs must return a function type *)
     in
     let annot = add_effect_annot annot eff in
@@ -2012,7 +2012,7 @@ and simple_typ_aux = function
   | Typ_app (id, [_; _]) when Id.compare id (mk_id "range") = 0 ->
      Typ_id (mk_id "int")
   | Typ_app (id, args) -> Typ_app (id, List.concat (List.map simple_typ_arg args))
-  | Typ_fn (typ1, typ2, effs) -> Typ_fn (simple_typ typ1, simple_typ typ2, effs)
+  | Typ_fn (_, typ1, typ2, effs) -> Typ_fn (Imp_none, simple_typ typ1, simple_typ typ2, effs)
   | Typ_tup typs -> Typ_tup (List.map simple_typ typs)
   | Typ_exist (_, _, Typ_aux (typ, l)) -> simple_typ_aux typ
   | typ_aux -> typ_aux
@@ -2825,7 +2825,7 @@ let remove_reference_types exp =
     | Typ_app (Id_aux (Id "reg",_), [Typ_arg_aux (Typ_arg_typ (Typ_aux (t_aux2, _)), _)]) ->
       rewrite_t_aux t_aux2
     | Typ_app (name,t_args) -> Typ_app (name,List.map rewrite_t_arg t_args)
-    | Typ_fn (t1,t2,eff) -> Typ_fn (rewrite_t t1,rewrite_t t2,eff)
+    | Typ_fn (imp,t1,t2,eff) -> Typ_fn (imp,rewrite_t t1,rewrite_t t2,eff)
     | Typ_tup ts -> Typ_tup (List.map rewrite_t ts)
     | _ -> t_aux
   and rewrite_t_arg t_arg = match t_arg with

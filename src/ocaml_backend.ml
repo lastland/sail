@@ -113,7 +113,7 @@ let rec ocaml_string_typ (Typ_aux (typ_aux, _)) arg =
      in
      parens (separate space [string "fun"; parens (separate (comma ^^ space) args); string "->"; body])
      ^^ space ^^ arg
-  | Typ_fn (typ1, typ2, _) -> string "\"FN\""
+  | Typ_fn (_, typ1, typ2, _) -> string "\"FN\""
   | Typ_var kid -> string "\"VAR\""
   | Typ_exist _ -> assert false
 
@@ -137,7 +137,7 @@ let rec ocaml_typ ctx (Typ_aux (typ_aux, _)) =
   | Typ_app (id, []) -> ocaml_typ_id ctx id
   | Typ_app (id, typs) -> parens (separate_map (string " * ") (ocaml_typ_arg ctx) typs) ^^ space ^^ ocaml_typ_id ctx id
   | Typ_tup typs -> parens (separate_map (string " * ") (ocaml_typ ctx) typs)
-  | Typ_fn (typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
+  | Typ_fn (_, typ1, typ2, _) -> separate space [ocaml_typ ctx typ1; string "->"; ocaml_typ ctx typ2]
   | Typ_var kid -> zencode_kid kid
   | Typ_exist _ -> assert false
 and ocaml_typ_arg ctx (Typ_arg_aux (typ_arg_aux, _) as typ_arg) =
@@ -438,7 +438,7 @@ let ocaml_funcls ctx =
   | [FCL_aux (FCL_Funcl (id, pexp),_)] ->
      let typ1, typ2 =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (_, typ1, typ2, _), _) -> (typ1, typ2)
        | _ -> failwith "Found val spec which was not a function!"
      in
      (* Any remaining type variables after simple_typ rewrite should
@@ -485,7 +485,7 @@ let ocaml_funcls ctx =
      let id = funcls_id funcls in
      let typ1, typ2 =
        match Bindings.find id ctx.val_specs with
-       | Typ_aux (Typ_fn (typ1, typ2, _), _) -> (typ1, typ2)
+       | Typ_aux (Typ_fn (_, typ1, typ2, _), _) -> (typ1, typ2)
        | _ -> failwith "Found val spec which was not a function!"
      in
      let kids = KidSet.union (tyvars_of_typ typ1) (tyvars_of_typ typ2) in
