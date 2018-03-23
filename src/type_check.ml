@@ -2121,6 +2121,7 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
           annot_exp (E_let (LB_aux (LB_val (tpat, inferred_bind), (let_loc, None)), crule check_exp env exp typ)) typ
      end
 
+  (* These functions are used as special debugging primitives *)
   | E_app (f, [E_aux (E_constraint nc, _)]), _ when Id.compare f (mk_id "__prove") = 0 ->
      Env.wf_constraint env nc;
      if prove env nc
@@ -2134,6 +2135,10 @@ let rec check_exp env (E_aux (exp_aux, (l, ())) as exp : unit exp) (Typ_aux (typ
         print_endline ("Solved " ^ string_of_nexp nexp ^ " = " ^ Big_int.to_string n);
         annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
      end
+  | E_app (f, [E_aux (E_cast (typ2, E_aux (E_cast (typ1, exp), _)), _)]), _ when Id.compare f (mk_id"__subtype") = 0 ->
+     subtyp l env typ1 typ2;
+     annot_exp (E_lit (L_aux (L_unit, Parse_ast.Unknown))) unit_typ
+
   | E_app (f, xs), _ when List.length (Env.get_overloads f env) > 0 ->
      let rec try_overload = function
        | (errs, []) -> typ_raise l (Err_no_overloading (f, errs))
