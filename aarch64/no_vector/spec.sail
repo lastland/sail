@@ -6651,7 +6651,7 @@ function __TakeColdReset () = {
 val AArch64_TakeException : (bits(2), ExceptionRecord, bits(64), int) -> unit effect {escape, rreg, undef, wreg}
 
 function AArch64_TakeException (target_el, exception, preferred_exception_return, vect_offset__arg) = {
-  vect_offset = vect_offset__arg;
+  vect_offset : int = vect_offset__arg;
   SynchronizeContext();
   assert((HaveEL(target_el) & ~(ELUsingAArch32(target_el))) & (UInt(target_el) >= UInt(PSTATE.EL)), "((HaveEL(target_el) && !(ELUsingAArch32(target_el))) && (UInt(target_el) >= UInt((PSTATE).EL)))");
   from_32 : bool = UsingAArch32();

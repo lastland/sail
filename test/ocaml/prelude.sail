@@ -29,10 +29,6 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_int : (int, int) -> bool
-
-function neq_int (x, y) = not_bool(eq_int(x, y))
-
 val neq_vec : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
@@ -41,7 +37,7 @@ val neq_anything : forall ('a : Type). ('a, 'a) -> bool
 
 function neq_anything (x, y) = not_bool(x == y)
 
-overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
+overload operator != = {neq_vec, neq_anything}
 
 val builtin_and_vec = "and_vec" : forall 'n. (bits('n), bits('n)) -> bits('n)
 

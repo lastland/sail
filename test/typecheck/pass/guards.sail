@@ -1,17 +1,8 @@
 infix 4 ==
 infixl 6 /
 
-val add_int : (int, int) -> int
-
-overload operator + = {add_int}
-
-val eq : forall ('a : Type). ('a, 'a) -> bool
-
-val neq : forall ('a : Type). ('a, 'a) -> bool
-
-overload operator == = {eq}
-
-overload operator != = {neq}
+$include <flow.sail>
+$include <arith.sail>
 
 val quotient : (int, int) -> int
 

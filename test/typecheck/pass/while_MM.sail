@@ -1,14 +1,11 @@
 default Order dec
 
-val add_range = {ocaml: "add", lem: "add"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
-
-val add_int = {ocaml: "add", lem: "add"}: (int, int) -> int
+$include <arith.sail>
 
 val add_vec_int : forall ('n : Int) ('ord : Order).
   (vector('n, 'ord, bit), int) -> vector('n, 'ord, bit)
 
-overload operator + = {add_vec_int, add_range, add_int}
+overload operator + = {add_vec_int}
 
 val bool_not = {ocaml: "not", lem: "not"}: bool -> bool
 

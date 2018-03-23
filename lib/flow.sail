@@ -9,7 +9,7 @@ val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : forall 'n 'm. (atom('n
 
 val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-function neq_atom (x, y) = not_bool(eq_atom(x, y))
+function neq_atom(x, y) = not_bool(eq_atom(x, y))
 
 val lteq_atom = "lteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = "gteq" : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -18,19 +18,24 @@ val gt_atom = "gt"     : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq", c: "eq_int"} : (int, int) -> bool
 
+val neq_int : (int, int) -> bool
+
+function neq_int(x, y) = not_bool(eq_int(x, y))
+
 val lteq_int = "lteq" : (int, int) -> bool
 val gteq_int = "gteq" : (int, int) -> bool
 val lt_int = "lt" : (int, int) -> bool
 val gt_int = "gt" : (int, int) -> bool
 
-overload operator == = {eq_atom, eq_range, eq_int}
+overload operator == = {eq_atom, eq_int}
+overload operator != = {neq_atom, neq_int}
 overload operator | = {or_bool}
 overload operator & = {and_bool}
 
-overload operator <= = {lteq_atom}
-overload operator < = {lt_atom}
-overload operator >= = {gteq_atom}
-overload operator > = {gt_atom}
+overload operator <= = {lteq_atom, lteq_int}
+overload operator < = {lt_atom, lt_int}
+overload operator >= = {gteq_atom, gteq_int}
+overload operator > = {gt_atom, gteq_int}
 
 $ifdef TEST
 

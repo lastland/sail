@@ -136,7 +136,7 @@ let rec doc_typ (Typ_aux (typ_aux, _)) =
   | Typ_id id -> doc_id id
   | Typ_app (id, []) -> doc_id id
   | Typ_app (Id_aux (DeIid str, _), [x; y]) ->
-     separate space [doc_typ_arg x; doc_typ_arg y]
+     separate space [doc_typ_arg x; string str; doc_typ_arg y]
               (*
   | Typ_app (id, [_; len; _; Typ_arg_aux (Typ_arg_typ (Typ_aux (Typ_id tid, _)), _)]) when Id.compare (mk_id "vector") id == 0 && Id.compare (mk_id "bit") tid == 0->
      string "bits" ^^ parens (doc_typ_arg len)

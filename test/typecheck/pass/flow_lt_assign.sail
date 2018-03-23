@@ -1,47 +1,18 @@
-default Order inc
+default Order dec
 
-val add_range = {ocaml: "add", lem: "integerAdd"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
-  (range('n, 'm), range('o, 'p)) -> range('n + 'o, 'm + 'p)
+$include <flow.sail>
+$include <arith.sail>
 
-val sub_range = {ocaml: "sub", lem: "integerMinus"}: forall ('n : Int) ('m : Int) ('o : Int) ('p : Int).
-  (range('n, 'm), range('o, 'p)) -> range('n - 'p, 'm - 'o)
+infix 4 ...
 
-val lt_range_atom = {ocaml: "lt", lem: "lt"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (range('n, 'm), atom('o)) -> bool
+type operator ... ('n : Int) ('m : Int) = {'o, 'n <= 'o <= 'm. atom('o)}
 
-val lteq_range_atom = {ocaml: "lteq", lem: "lteq"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (range('n, 'm), atom('o)) -> bool
-
-val gt_range_atom = {ocaml: "gt", lem: "gt"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (range('n, 'm), atom('o)) -> bool
-
-val gteq_range_atom = {ocaml: "gteq", lem: "gteq"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (range('n, 'm), atom('o)) -> bool
-
-val lt_atom_range = {ocaml: "lt", lem: "lt"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (atom('n), range('m, 'o)) -> bool
-
-val lteq_atom_range = {ocaml: "lteq", lem: "lteq"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (atom('n), range('m, 'o)) -> bool
-
-val gt_atom_range = {ocaml: "gt", lem: "gt"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (atom('n), range('m, 'o)) -> bool
-
-val gteq_atom_range = {ocaml: "gteq", lem: "gteq"}: forall ('n : Int) ('m : Int) ('o : Int).
-  (atom('n), range('m, 'o)) -> bool
-
-overload operator + = {add_range}
-
-overload operator - = {sub_range}
-
-overload operator < = {lt_atom_range, lt_range_atom}
-
-val branch : range(0, 63) -> range(0, 63)
+val branch : forall 'n, 0 <= 'n <= 63. atom('n) -> 0 ... 63
 
 function branch x = {
-  y = x;
+  let y = x;
   if y < 32 then {
-    y = 31;
-    y + 32
+    let z = 31;
+    z + 32
   } else y - 32
 }
