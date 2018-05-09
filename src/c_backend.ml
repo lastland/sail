@@ -191,7 +191,7 @@ let rec frag_rename from_id to_id = function
   | F_id id when Id.compare id from_id = 0 -> F_id to_id
   | F_id id -> F_id id
   | F_ref id when Id.compare id from_id = 0 -> F_ref to_id
-  | F_ref id -> F_id id
+  | F_ref id -> F_ref id
   | F_lit v -> F_lit v
   | F_have_exception -> F_have_exception
   | F_current_exception -> F_current_exception
@@ -2760,7 +2760,9 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
        | "undefined_vector", _ -> Printf.sprintf "undefined_vector_%s" (sgen_ctyp_name ctyp)
        | fname, _ -> fname
      in
-     if is_stack_ctyp ctyp then
+     if fname = "reg_deref" then
+       string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
+     else if is_stack_ctyp ctyp then
        string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
      else
        string (Printf.sprintf "  %s(%s, %s);" fname (sgen_clexp x) c_args)
