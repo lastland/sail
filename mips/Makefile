@@ -13,10 +13,10 @@ MIPS_SAILS:=$(MIPS_SAIL_DIR)/mips_wrappers.sail $(MIPS_SAIL_DIR)/mips_ast_decl.s
 MIPS_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
 mips: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -ocaml -o mips -memo_z3 $^
+	$(SAIL) -ocaml -no_effects -o mips -memo_z3 $^
 
-mips.c: c_hack.sail $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS) $(MIPS_MAIN)
-	$(SAIL) -c -O -ddump_rewrite_ast mips -memo_z3 $^ 1> mips.c 2> mips_dbg
+mips.c: $(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
+	$(SAIL) -c -O -no_effects -ddump_rewrite_ast mips -memo_z3 $^ 1> mips.c 2> mips_dbg
 
 mips_no_tlb.lem: $(MIPS_PRE) $(MIPS_TLB_STUB) $(MIPS_SAILS)
 	$(SAIL) -lem -o mips_no_tlb -lem_mwords -lem_lib Mips_extras -undefined_gen -memo_z3 $^

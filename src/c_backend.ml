@@ -2761,7 +2761,10 @@ let rec codegen_instr fid ctx (I_aux (instr, _)) =
        | fname, _ -> fname
      in
      if fname = "reg_deref" then
-       string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
+       if is_stack_ctyp ctyp then
+         string (Printf.sprintf  " %s = *(%s);" (sgen_clexp_pure x) c_args)
+       else
+         string (Printf.sprintf  " set_%s(&%s, *(%s));" (sgen_ctyp_name ctyp) (sgen_clexp_pure x) c_args)
      else if is_stack_ctyp ctyp then
        string (Printf.sprintf "  %s = %s(%s);" (sgen_clexp_pure x) fname c_args)
      else
@@ -3174,7 +3177,7 @@ let codegen_vector ctx (direction, ctyp) =
       ^^ string "}"
     in
     let internal_vector_update =
-      string (Printf.sprintf "void internal_vector_update_%s(%s *rop, %s op, const int64_t n, const %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
+      string (Printf.sprintf "void internal_vector_update_%s(%s *rop, %s op, const int64_t n, %s elem) {\n" (sgen_id id) (sgen_id id) (sgen_id id) (sgen_ctyp ctyp))
       ^^ string (if is_stack_ctyp ctyp then
                    "  rop->data[n] = elem;\n"
                  else

@@ -13,9 +13,9 @@ function fetch_and_execute () = {
     print_bits("PC: ", PC);
     try {
       let pc_pa = TranslatePC(PC);
-      /*print_bits("pa: ", pc_pa);*/
+      print_bits("pa: ", pc_pa);
       let instr = MEMr_wrapper(pc_pa, 4);
-      /*print_bits("hex: ", instr);*/
+      print_bits("hex: ", instr);
       let instr_ast = decode(instr);
       match instr_ast {
         Some(HCF()) => {

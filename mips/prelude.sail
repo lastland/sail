@@ -154,6 +154,9 @@ overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int}
 
 overload negate = {negate_range, negate_int}
 
+val mult_atom = {ocaml: "mult", lem: "integerMult", _: "mult_int"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n * 'm)
+
 val mult_range = {ocaml: "mult", lem: "integerMult", _: "mult_int"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
 
@@ -191,17 +194,29 @@ overload min = {min_atom, min_nat, min_int}
 
 overload max = {max_atom, max_nat, max_int}
 
+val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
+
 val __WriteRAM = "write_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m), bits(8 * 'n)) -> unit effect {wmv}
-
-val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
-function __MIPS_write (addr, width, data) = __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data)
 
 val __ReadRAM = "read_ram" : forall 'n 'm.
   (atom('m), atom('n), bits('m), bits('m)) -> bits(8 * 'n) effect {rmem}
 
 val __MIPS_read : forall 'n. (bits(64), atom('n)) -> bits(8 * 'n) effect {rmem}
-function __MIPS_read (addr, width) = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr)
+function __MIPS_read (addr, width) = {
+  let data = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr);
+  print_bits("__MIPS_read: ", data);
+  data
+}
+
+val __MIPS_write : forall 'n. (bits(64), atom('n), bits(8 * 'n)) -> unit effect {wmv}
+function __MIPS_write (addr, width, data) = {
+  print_bits("__MIPS_write: ", data);
+  __WriteRAM(64, width, 0x0000_0000_0000_0000, addr, data);
+  let written_data = __ReadRAM(64, width, 0x0000_0000_0000_0000, addr);
+  assert(data == written_data);
+  print_bits("wrote: ", written_data);
+}
 
 val replicate_bits = "replicate_bits" : forall 'n 'm. (bits('n), atom('m)) -> bits('n * 'm)
 
@@ -212,7 +227,6 @@ function operator ^^ (bs, n) = replicate_bits (bs, n)
 val pow2 = "pow2" : forall 'n. atom('n) -> atom(2 ^ 'n)
 
 val print_int = "print_int" : (string, int) -> unit
-val print_bits = "print_bits" : forall 'n. (string, bits('n)) -> unit
 val print_string = "print_string" : (string, string) -> unit
 
 union exception = {
@@ -302,3 +316,6 @@ val mask : forall 'm 'n , 'm >= 'n > 0 . bits('m) -> bits('n)
 function mask bs = bs['n - 1 .. 0]
 
 val "get_time_ns" : unit -> int
+
+val slice = "slice" : forall ('n : Int) ('m : Int), 0 <= 'n <= 'm.
+  (bits('m), int, atom('n)) -> bits('n)
