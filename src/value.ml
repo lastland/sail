@@ -447,6 +447,8 @@ let primops =
       ("shiftl", value_shiftl);
       ("add_int", value_add_int);
       ("sub_int", value_sub_int);
+      ("div_int", value_quotient);
+      ("mult_int", value_mult);
       ("mult", value_mult);
       ("quotient", value_quotient);
       ("modulus", value_modulus);

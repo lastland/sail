@@ -1126,11 +1126,13 @@ function extendLoad(memResult, sign) = {
 function clause execute (Load(width, sign, linked, base, rt, offset)) =
   {
     vAddr : bits(64) = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, width);
+    print_bits("vAddr Load = ", vAddr);
     if ~ (isAddressAligned(vAddr, width)) then
       (SignalExceptionBadAddr(AdEL, vAddr)) /* unaligned access */
     else
       let pAddr = (TLBTranslate(vAddr, LoadData)) in
-          {
+	  {
+	    print_bits("pAddr Load = ", pAddr);
             memResult : bits(64) = if (linked) then
                 {
                   CP0LLBit  = 0b1;
@@ -1174,13 +1176,16 @@ function clause decode (0b111100 @ base : regno @ rt : regno @ offset : imm16) =
   Some(Store(D, true, base, rt, offset))  /* SCD */
 function clause execute (Store(width, conditional, base, rt, offset)) =
       {
-        vAddr : bits(64) = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, width);
+	vAddr : bits(64) = addrWrapper(sign_extend(offset) + rGPR(base), StoreData, width);
+	print_bits("vAddr Store = ", vAddr);
         rt_val = rGPR(rt);
-        if ~ (isAddressAligned(vAddr, width)) then
-          (SignalExceptionBadAddr(AdES, vAddr)) /* unaligned access */
-        else
+	if ~ (isAddressAligned(vAddr, width)) then {
+	  print("BadAddr");
+	  (SignalExceptionBadAddr(AdES, vAddr)) /* unaligned access */
+	} else
           let pAddr = (TLBTranslate(vAddr, StoreData)) in
-          {
+	  {
+		print_bits("pAddr Store = ", pAddr);
                 if (conditional) then
                   {
 		    success : bool = if (CP0LLBit[0]) then match width
@@ -1211,7 +1216,8 @@ function clause decode(0b100010 @ base : regno @ rt : regno @ offset : imm16) =
 function clause execute(LWL(base, rt, offset)) =
       {
         /* XXX length check not quite right, but conservative */
-        vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
+	vAddr = addrWrapper(sign_extend(offset) + rGPR(base), LoadData, W);
+	print_bits("vAddr LWL = ", vAddr);
         let pAddr = (TLBTranslate(vAddr, LoadData)) in
           {
             mem_val = MEMr_wrapper (pAddr[63..2] @ 0b00, 4); /* read word of interest */
