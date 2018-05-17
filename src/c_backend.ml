@@ -1911,10 +1911,52 @@ let rec compile_aexp ctx = function
      (fun clexp -> icopy clexp (F_field (fst cval, Util.zencode_string (string_of_id id)), ctyp)),
      cleanup
 
-  | AE_for _ ->
-     [],
+  | AE_for (loop_var, loop_from, loop_to, loop_step, Ord_aux (Ord_inc, _), body) ->
+     (* This is a bit of a hack, we force loop_var to be CT_int64 by
+        forcing it's type to be a known nexp that will map to
+        CT_int64. *)
+     let make_small = function
+       | AV_id (id, Local (Immutable, typ)) when Id.compare id loop_var = 0 -> AV_id (id, Local (Immutable, atom_typ (nint 0)))
+       | aval -> aval
+     in
+     let body = map_aval make_small body in
+
+     (* Loop variables *)
+     let from_setup, from_ctyp, from_call, from_cleanup = compile_aexp ctx loop_from in
+     let from_gs = gensym () in
+     let to_setup, to_ctyp, to_call, to_cleanup = compile_aexp ctx loop_to in
+     let to_gs = gensym () in
+     let step_setup, step_ctyp, step_call, step_cleanup = compile_aexp ctx loop_step in
+     let step_gs = gensym () in
+     let variable_init gs setup ctyp call cleanup =
+       [idecl CT_int64 gs;
+        if is_stack_ctyp ctyp then
+          iblock (setup @ [call (CL_id gs)] @ cleanup)
+        else
+          let gs' = gensym () in
+          iblock (setup
+                  @ [idecl ctyp gs'; ialloc ctyp gs'; call (CL_id gs'); iconvert (CL_id gs) CT_int64 gs' ctyp; iclear ctyp gs']
+                  @ cleanup)]
+     in
+
+     let loop_start_label = label "for_start_" in
+     let body_setup, _, body_call, body_cleanup = compile_aexp ctx body in
+     let body_gs = gensym () in
+
+     variable_init from_gs from_setup from_ctyp from_call from_cleanup
+     @ variable_init to_gs to_setup to_ctyp to_call to_cleanup
+     @ variable_init step_gs step_setup step_ctyp step_call step_cleanup
+     @ [iblock ([idecl CT_int64 loop_var;
+                 icopy (CL_id loop_var) (F_id from_gs, CT_int64);
+                 ilabel loop_start_label;
+                 idecl CT_unit body_gs;
+                 iblock (body_setup
+                         @ [body_call (CL_id body_gs)]
+                         @ body_cleanup
+                         @ [icopy (CL_id loop_var) (F_op (F_id loop_var, "+", F_id step_gs), CT_int64);
+                            ijump (F_op (F_id loop_var, "<=", F_id to_gs), CT_bool) loop_start_label])])],
      CT_unit,
-     (fun clexp -> icomment "for loop"),
+     (fun clexp -> icopy clexp unit_fragment),
      []
 
 (*

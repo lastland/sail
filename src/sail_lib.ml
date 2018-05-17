@@ -597,3 +597,15 @@ let speculate_conditional_success () = true
 (* Return nanoseconds since epoch. Truncates to ocaml int but will be OK for next 100 years or so... *)
 let get_time_ns () = Big_int.of_int (int_of_float (1e9 *. Unix.gettimeofday ()))
 
+let load_raw (paddr, file) =
+  let i = ref 0 in
+  let paddr = uint paddr in
+  let in_chan = open_in file in
+  try
+    while true do
+      let byte = input_char in_chan |> Char.code in
+      wram (Big_int.add paddr (Big_int.of_int !i)) byte;
+      incr i
+    done
+  with
+  | End_of_file -> ()

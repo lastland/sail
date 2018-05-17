@@ -524,11 +524,22 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      let v_from = value_of_exp exp_from in
      let v_to = value_of_exp exp_to in
      let v_step = value_of_exp exp_step in
-     begin match value_gt [v_from; v_to] with
-     | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
-     | V_bool false ->
-        wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
-     | _ -> assert false
+     begin match ord with
+     | Ord_aux (Ord_inc, _) ->
+        begin match value_gt [v_from; v_to] with
+        | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
+        | V_bool false ->
+           wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_add_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
+        | _ -> assert false
+        end
+     | Ord_aux (Ord_dec, _) ->
+        begin match value_lt [v_from; v_to] with
+        | V_bool true -> wrap (E_lit (L_aux (L_unit, Parse_ast.Unknown)))
+        | V_bool false ->
+           wrap (E_block [subst id v_from body; E_aux (E_for (id, exp_of_value (value_sub_int [v_from; v_step]), exp_to, exp_step, ord, body), annot)])
+        | _ -> assert false
+        end
+     | Ord_aux (Ord_var _, _) -> failwith "Polymorphic order in foreach"
      end
   | E_for (id, exp_from, exp_to, exp_step, ord, body) when is_value exp_to && is_value exp_step ->
      step exp_from >>= fun exp_from' -> wrap (E_for (id, exp_from', exp_to, exp_step, ord, body))
