@@ -478,8 +478,8 @@ let gteq_real (x, y) = Rational.geq x y
 let to_real x = Rational.of_int (Big_int.to_int x) (* FIXME *)
 let negate_real x = Rational.neg x
 
-let round_down x = failwith "round_down" (* Num.big_int_of_num (Num.floor_num x) *)
-let round_up x = failwith "round_up" (* Num.big_int_of_num (Num.ceiling_num x) *)
+let round_down x = Rational.floor x (* Num.big_int_of_num (Num.floor_num x) *)
+let round_up x = Rational.ceiling x (* Num.big_int_of_num (Num.ceiling_num x) *)
 let quotient_real (x, y) = Rational.div x y
 let mult_real (x, y) = Rational.mul x y (* Num.mult_num x y *)
 let real_power (x, y) = failwith "real_power" (* Num.power_num x (Num.num_of_big_int y) *)
@@ -509,15 +509,13 @@ let rec pow x = function
   | n -> x * pow x (n - 1)
 
 let real_of_string str =
-  let rat_of_string sr = Rational.of_int (int_of_string str) in
-  try
-    let point = String.index str '.' in
-    let whole = Rational.of_int (int_of_string (String.sub str 0 point)) in
-    let frac_str = String.sub str (point + 1) (String.length str - (point + 1)) in
-    let frac = Rational.div (rat_of_string frac_str) (Rational.of_int (pow 10 (String.length frac_str))) in
-    Rational.add whole frac
-  with
-  | Not_found -> Rational.of_int (int_of_string str)
+  match String.split_on_char '.' str with
+  | [whole; frac] ->
+     let whole = Rational.of_int (int_of_string whole) in
+     let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (pow 10 (String.length frac)))  in
+     Rational.add whole frac
+  | [whole] -> Rational.of_int (int_of_string str)
+  | _ -> failwith "invalid real literal"
 
 (* Not a very good sqrt implementation *)
 let sqrt_real x = failwith "sqrt_real" (* real_of_string (string_of_float (sqrt (Num.float_of_num x))) *)

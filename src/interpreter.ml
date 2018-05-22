@@ -109,6 +109,14 @@ let value_of_lit (L_aux (l_aux, _)) =
      Util.string_to_list str
      |> List.map (fun c -> V_bit (Sail_lib.bin_char c))
      |> (fun v -> V_vector v)
+  | L_real str ->
+     begin match Util.split_on_char '.' str with
+     | [whole; frac] ->
+        let whole = Rational.of_int (int_of_string whole) in
+        let frac = Rational.div (Rational.of_int (int_of_string frac)) (Rational.of_int (Util.power 10 (String.length frac)))  in
+        V_real (Rational.add whole frac)
+     | _ -> failwith "could not parse real literal"
+     end
   | _ -> failwith "Unimplemented value_of_lit" (* TODO *)
 
 let is_value = function
@@ -254,7 +262,7 @@ let rec step (E_aux (e_aux, annot) as orig_exp) =
      step exp >>= fun exp' -> wrap (E_if (exp', then_exp, else_exp))
 
   | E_loop (While, exp, body) -> wrap (E_if (exp, E_aux (E_block [body; orig_exp], annot), exp_of_value V_unit))
-  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, orig_exp, exp_of_value V_unit), annot)])
+  | E_loop (Until, exp, body) -> wrap (E_block [body; E_aux (E_if (exp, exp_of_value V_unit, orig_exp), annot)])
 
   | E_assert (exp, msg) when is_true exp -> wrap unit_exp
   | E_assert (exp, msg) when is_false exp && is_value msg ->
@@ -627,7 +635,7 @@ let stack_state (_, lstate, _) = lstate
 
 type frame =
   | Done of state * value
-  | Step of string * state * (Type_check.tannot exp) monad * (string * lstate * (value -> (Type_check.tannot exp) monad)) list
+  | Step of string Lazy.t * state * (Type_check.tannot exp) monad * (string Lazy.t * lstate * (value -> (Type_check.tannot exp) monad)) list
   | Break of frame
 
 let rec eval_frame' ast = function
@@ -640,17 +648,17 @@ let rec eval_frame' ast = function
         (* print_endline ("Returning value: " ^ string_of_value (value_of_exp v) |> Util.cyan |> Util.clear); *)
         Step (stack_string head, (stack_state head, snd state), stack_cont head (value_of_exp v), stack')
      | Pure exp', _ ->
-        let out' = Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp') in
+        let out' = lazy (Pretty_print_sail.to_string (Pretty_print_sail.doc_exp exp')) in
         Step (out', state, step exp', stack)
      | Yield (Call(id, vals, cont)), _ when string_of_id id = "break" ->
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         let body = exp_of_fundef (get_fundef id ast) arg in
-        Break (Step ("", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
+        Break (Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack))
      | Yield (Call(id, vals, cont)), _ ->
         (* print_endline ("Calling " ^ string_of_id id |> Util.cyan |> Util.clear); *)
         let arg = if List.length vals != 1 then tuple_value vals else List.hd vals in
         let body = exp_of_fundef (get_fundef id ast) arg in
-        Step ("", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
+        Step (lazy "", (initial_lstate, snd state), return body, (out, fst state, cont) :: stack)
      | Yield (Gets cont), _ ->
         eval_frame' ast (Step (out, state, cont state, stack))
      | Yield (Puts (state', cont)), _ ->

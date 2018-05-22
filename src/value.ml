@@ -73,6 +73,7 @@ type value =
   | V_vector of value list
   | V_list of value list
   | V_int of Big_int.num
+  | V_real of Rational.t
   | V_bool of bool
   | V_bit of Sail_lib.bit
   | V_tuple of value list
@@ -126,6 +127,10 @@ let coerce_listlike = function
 
 let coerce_int = function
   | V_int i -> i
+  | _ -> assert false
+
+let coerce_real = function
+  | V_real r -> r
   | _ -> assert false
 
 let coerce_cons = function
@@ -340,6 +345,7 @@ let rec string_of_value = function
   | V_unit -> "()"
   | V_string str -> "\"" ^ str ^ "\""
   | V_ref str -> "ref " ^ str
+  | V_real r -> "REAL" (* No Rational.to_string *)
   | V_ctor (str, vals) -> str ^ "(" ^ Util.string_of_list ", " string_of_value vals ^ ")"
   | V_record record ->
      "{" ^ Util.string_of_list ", " (fun (field, v) -> field ^ "=" ^ string_of_value v) (StringMap.bindings record) ^ "}"
@@ -412,6 +418,46 @@ let value_print_int = function
   | [msg; n] -> output_endline (coerce_string msg ^ string_of_value n); V_unit
   | _ -> failwith "value print_int"
 
+let value_concat_str = function
+  | [v1; v2] -> V_string (Sail_lib.concat_str (coerce_string v1, coerce_string v2))
+  | _ -> failwith "value concat_str"
+
+let value_to_real = function
+  | [v] -> V_real (Sail_lib.to_real (coerce_int v))
+  | _ -> failwith "value to_real"
+
+let value_quotient_real = function
+  | [v1; v2] -> V_real (Sail_lib.quotient_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value quotient_real"
+
+let value_round_up = function
+  | [v] -> V_int (Sail_lib.round_up (coerce_real v))
+  | _ -> failwith "value round_up"
+
+let value_round_down = function
+  | [v] -> V_int (Sail_lib.round_down (coerce_real v))
+  | _ -> failwith "value round_down"
+
+let value_eq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.eq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value eq_real"
+
+let value_lt_real = function
+  | [v1; v2] -> V_bool (Sail_lib.lt_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value lt_real"
+
+let value_gt_real = function
+  | [v1; v2] -> V_bool (Sail_lib.gt_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value gt_real"
+
+let value_lteq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.lteq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value lteq_real"
+
+let value_gteq_real = function
+  | [v1; v2] -> V_bool (Sail_lib.gteq_real (coerce_real v1, coerce_real v2))
+  | _ -> failwith "value gteq_real"
+
 let primops =
   List.fold_left
     (fun r (x, y) -> StringMap.add x y r)
@@ -425,6 +471,7 @@ let primops =
       ("string_of_bits", fun vs -> V_string (string_of_value (List.hd vs)));
       ("print_bits", value_print_bits);
       ("print_int", value_print_int);
+      ("concat_str", value_concat_str);
       ("eq_int", value_eq_int);
       ("lteq", value_lteq);
       ("gteq", value_gteq);
@@ -478,6 +525,15 @@ let primops =
       ("trace_memory_read", fun _ -> V_unit);
       ("trace_memory_write", fun _ -> V_unit);
       ("load_raw", value_load_raw);
+      ("to_real", value_to_real);
+      ("eq_real", value_eq_real);
+      ("lt_real", value_lt_real);
+      ("gt_real", value_gt_real);
+      ("lteq_real", value_lt_real);
+      ("gteq_real", value_gt_real);
+      ("round_up", value_round_up);
+      ("round_down", value_round_down);
+      ("quotient_real", value_quotient_real);
       ("undefined_unit", fun _ -> V_unit);
       ("undefined_bit", fun _ -> V_bit Sail_lib.B0);
       ("undefined_int", fun _ -> V_int Big_int.zero);
