@@ -39,6 +39,9 @@ M%.thy: m%.lem m%_types.lem mips_extras.lem
 LOC_FILES:=$(MIPS_PRE) $(MIPS_TLB) $(MIPS_SAILS) $(MIPS_MAIN)
 include ../etc/loc.mk
 
+cloc: $(LOC_FILES)
+	cloc --by-file --force-lang C,sail $^
+
 clean:
 	rm -rf mips Mips.thy mips.lem mips_types.lem _sbuild
 	rm -f mipsScript.sml mips_typesScript.sml mips_extrasScript.sml
