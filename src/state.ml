@@ -78,6 +78,30 @@ let find_registers defs =
       | _ -> acc
     ) [] defs
 
+let count_register typ =
+  match typ with
+  | Typ_aux (Typ_app (id, args), _) ->
+     (match id with
+      | Id_aux (Id x, _) ->
+         if x = "vector" then
+           match args with
+           | h :: args' ->
+              (match h with
+               | Typ_arg_aux (Typ_arg_nexp (Nexp_aux ((Nexp_constant n), _)), _) ->
+                  Big_int.to_int n
+               | _ -> 0) (* TODO: reconsider *)
+           | _ -> 0 (* TODO: reconsider *)
+         else 1 (* TODO: other types? *)
+      | _ -> 1)
+  | _ -> 1
+
+let count_registers defs =
+  let regs = find_registers defs in
+  List.fold_left
+    (fun acc (typ, _) ->
+      (count_register typ) :: acc
+    ) [] regs
+
 let generate_regstate = function
   | [] -> ["type regstate = unit"]
   | registers ->

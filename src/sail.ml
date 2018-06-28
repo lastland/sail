@@ -64,6 +64,7 @@ let opt_print_ocaml = ref false
 let opt_print_c = ref false
 let opt_print_latex = ref false
 let opt_print_coq = ref false
+let opt_print_fstar = ref false
 let opt_memo_z3 = ref false
 let opt_sanity = ref false
 let opt_libs_lem = ref ([]:string list)
@@ -149,6 +150,9 @@ let options = Arg.align ([
   ( "-dcoq_debug_on",
     Arg.String (fun f -> Pretty_print_coq.opt_debug_on := f::!Pretty_print_coq.opt_debug_on),
     "<function> Produce debug messages for Coq output on given function");
+  ( "-fstar",
+    Arg.Set opt_print_fstar,
+    " output an F* translated version of the input");
   ( "-latex_prefix",
     Arg.String (fun prefix -> Latex.opt_prefix_latex := prefix),
     " set a custom prefix for generated latex command (default sail)");
@@ -202,7 +206,7 @@ let options = Arg.align ([
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
-  ( "-ddump_rewrite_ast",
+  ( "-ddump_rewrtie_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_flow_graphs",
@@ -325,6 +329,12 @@ let main() =
          let type_envs, ast_coq = State.add_regstate_defs true type_envs ast in
          let ast_coq = rewrite_ast_coq ast_coq in
          output "" (Coq_out (!opt_libs_coq)) [out_name,ast_coq]
+       else ());
+      (if !(opt_print_fstar)
+       then
+         let type_envs, ast_fstar = State.add_regstate_defs true type_envs ast in
+         let ast_fstar = rewrite_ast_fstar ast_fstar in
+         output "" FStar_out [out_name, ast_fstar]
        else ());
       (if !(opt_print_latex)
        then

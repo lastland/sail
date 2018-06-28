@@ -59,6 +59,7 @@ val rewrite_ast_coq : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_ocaml : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_c : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_interpreter : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
+val rewrite_ast_fstar : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 val rewrite_ast_check : Type_check.tannot Ast.defs -> Type_check.tannot Ast.defs
 
 val load_file_no_check : Ast.order -> string -> unit Ast.defs
@@ -72,6 +73,7 @@ val opt_dno_cast : bool ref
 type out_type =
   | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
   | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
+  | FStar_out
 
 val output :
   string ->                           (* The path to the library *)

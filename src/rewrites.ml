@@ -665,11 +665,11 @@ let remove_vector_concat_pat pat =
     fold_pat { id_pat_alg with
                p_aux = (function
                         | (P_typ (_,P_aux (p,_)),annot)
-                        | (p,annot) -> 
+                        | (p,annot) ->
                            P_aux (p,annot)
                        )
              } in
-  
+
   (* let pat = remove_typed_patterns pat in *)
 
   let fresh_id_v = fresh_id "v__" in
@@ -757,7 +757,7 @@ let remove_vector_concat_pat pat =
       let env = env_of_annot rannot in
       let rootname = string_of_id rootid in
       let childname = string_of_id child in
-      
+
       let root = E_aux (E_id rootid, rannot) in
       let index_i = simple_num l i in
       let index_j = simple_num l j in
@@ -874,7 +874,7 @@ let remove_vector_concat_pat pat =
            S.add rootid roots_needed
         ) decls S.empty in
     List.filter
-      (fun (_,(_,childid)) ->  
+      (fun (_,(_,childid)) ->
        S.mem childid roots_needed ||
          String.length childid < 3 ||
            not (String.sub childid 0 2 = String.sub "v__" 0 2))
@@ -890,7 +890,7 @@ let remove_vector_concat_pat pat =
   (* at this point shouldn't have P_as patterns in P_vector_concat patterns any more,
      all P_as and P_id vectors should have their declarations in decls.
      Now flatten all vector_concat patterns *)
-  
+
   let flatten =
     let p_vector_concat ps =
       let aux p acc = match p with
@@ -898,7 +898,7 @@ let remove_vector_concat_pat pat =
         | pat -> pat :: acc in
       P_vector_concat (List.fold_right aux ps []) in
     {id_pat_alg with p_vector_concat = p_vector_concat} in
-  
+
   let pat = fold_pat flatten pat in
 
   (* at this point pat should be a flat pattern: no vector_concat patterns
@@ -948,9 +948,9 @@ let remove_vector_concat_pat pat =
         P_vector_concat ps' in
 
     {id_pat_alg with p_vector_concat = p_vector_concat} in
-  
+
   let pat = fold_pat remove_vector_concats pat in
-  
+
   (pat,letbinds,decls)
 
 (* assumes there are no more E_internal expressions *)
@@ -975,7 +975,7 @@ let rewrite_exp_remove_vector_concat_pat rewriters (E_aux (exp,(l,annot)) as ful
   | exp -> rewrite_base full_exp
 
 let rewrite_fun_remove_vector_concat_pat
-      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) = 
+      rewriters (FD_aux (FD_function(recopt,tannotopt,effectopt,funcls),(l,fdannot))) =
   let rewrite_funcl (FCL_aux (FCL_Funcl(id,pexp),(l,annot))) =
     let pat,guard,exp,pannot = destruct_pexp pexp in
     let (pat',_,decls) = remove_vector_concat_pat pat in
@@ -1154,7 +1154,7 @@ let rec pat_to_exp (P_aux (pat,(l,annot))) =
   | P_lit lit -> rewrap (E_lit lit)
   | P_wild -> raise (Reporting_basic.err_unreachable l
       "pat_to_exp given wildcard pattern")
-  | P_or(pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1 
+  | P_or(pat1, pat2) -> (* todo: insert boolean or *) pat_to_exp pat1
   | P_not(pat) -> (* todo: insert boolean not *) pat_to_exp pat
   | P_as (pat,id) -> rewrap (E_id id)
   | P_var (pat, _) -> pat_to_exp pat
@@ -1714,7 +1714,7 @@ let rewrite_exp_lift_assign_intro rewriters ((E_aux (exp,((l,_) as annot))) as f
            let t' = rewriters.rewrite_exp rewriters new_nmap t in
            let e' = rewriters.rewrite_exp rewriters new_nmap e in
            let exps' = walker exps in
-           fst ((Envmap.fold 
+           fst ((Envmap.fold
                   (fun (res,effects) i (t,e) ->
                 let bitlit =  E_aux (E_lit (L_aux(L_zero, Parse_ast.Generated l)),
                                      (Parse_ast.Generated l, simple_annot bit_t)) in
@@ -1835,14 +1835,14 @@ let rewrite_register_ref_writes (Defs defs) =
   | E_vector_access (vec,index) -> rewrap (E_vector_access (rewrite_rec vec,rewrite_rec index))
   | E_vector_subrange (vec,i1,i2) ->
     rewrap (E_vector_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2))
-  | E_vector_update (vec,index,new_v) -> 
+  | E_vector_update (vec,index,new_v) ->
     rewrap (E_vector_update (rewrite_rec vec,rewrite_rec index,rewrite_rec new_v))
   | E_vector_update_subrange (vec,i1,i2,new_v) ->
     rewrap (E_vector_update_subrange (rewrite_rec vec,rewrite_rec i1,rewrite_rec i2,rewrite_rec new_v))
-  | E_case (exp ,pexps) -> 
+  | E_case (exp ,pexps) ->
     rewrap (E_case (rewrite_rec exp,
-                    (List.map 
-                       (fun (Pat_aux (Pat_exp(p,e),pannot)) -> 
+                    (List.map
+                       (fun (Pat_aux (Pat_exp(p,e),pannot)) ->
                           Pat_aux (Pat_exp(rewriters.rewrite_pat rewriters nmap p,rewrite_rec e),pannot)) pexps)))
   | E_let (letbind,body) -> rewrap (E_let(rewriters.rewrite_let rewriters nmap letbind,rewrite_rec body))
   | E_var (lexp,exp,body) ->
@@ -2568,7 +2568,7 @@ let rewrite_defs_remove_blocks =
   let e_aux = function
     | (E_block es,(l,_)) -> f l es
     | (e,annot) -> E_aux (e,annot) in
-    
+
   let alg = { id_exp_alg with e_aux = e_aux } in
 
   rewrite_defs_base
@@ -2602,7 +2602,7 @@ let letbind (v : 'a exp) (body : 'a exp -> 'a exp) : 'a exp =
      raise (Reporting_basic.err_unreachable l "no type information")
 
 
-let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp = 
+let rec mapCont (f : 'b -> ('b -> 'a exp) -> 'a exp) (l : 'b list) (k : 'b list -> 'a exp) : 'a exp =
   match l with
   | [] -> k []
   | exp :: exps -> f exp (fun exp -> mapCont f exps (fun exps -> k (exp :: exps)))
@@ -2645,24 +2645,24 @@ let rewrite_defs_letbind_effects =
   and n_pexpL (newreturn : bool) (pexps : 'a pexp list) (k : 'a pexp list -> 'a exp) : 'a exp =
     mapCont (n_pexp newreturn) pexps k
 
-  and n_fexps (fexps : 'a fexps) (k : 'a fexps -> 'a exp) : 'a exp = 
+  and n_fexps (fexps : 'a fexps) (k : 'a fexps -> 'a exp) : 'a exp =
     let (FES_aux (FES_Fexps (fexps_aux,b),annot)) = fexps in
-    n_fexpL fexps_aux (fun fexps_aux -> 
+    n_fexpL fexps_aux (fun fexps_aux ->
     k (fix_eff_fexps (FES_aux (FES_Fexps (fexps_aux,b),annot))))
 
-  and n_opt_default (opt_default : 'a opt_default) (k : 'a opt_default -> 'a exp) : 'a exp = 
+  and n_opt_default (opt_default : 'a opt_default) (k : 'a opt_default -> 'a exp) : 'a exp =
     let (Def_val_aux (opt_default,annot)) = opt_default in
     match opt_default with
     | Def_val_empty -> k (Def_val_aux (Def_val_empty,annot))
     | Def_val_dec exp ->
-       n_exp_name exp (fun exp -> 
+       n_exp_name exp (fun exp ->
        k (fix_eff_opt_default (Def_val_aux (Def_val_dec exp,annot))))
 
   and n_lb (lb : 'a letbind) (k : 'a letbind -> 'a exp) : 'a exp =
     let (LB_aux (lb,annot)) = lb in
     match lb with
     | LB_val (pat,exp1) ->
-       n_exp exp1 (fun exp1 -> 
+       n_exp exp1 (fun exp1 ->
        k (fix_eff_lb (LB_aux (LB_val (pat,exp1),annot))))
 
   and n_lexp (lexp : 'a lexp) (k : 'a lexp -> 'a exp) : 'a exp =
@@ -2673,16 +2673,16 @@ let rewrite_defs_letbind_effects =
        n_exp_name exp (fun exp ->
        k (fix_eff_lexp (LEXP_aux (LEXP_deref exp, annot))))
     | LEXP_memory (id,es) ->
-       n_exp_nameL es (fun es -> 
+       n_exp_nameL es (fun es ->
        k (fix_eff_lexp (LEXP_aux (LEXP_memory (id,es),annot))))
     | LEXP_tup es ->
        n_lexpL es (fun es ->
        k (fix_eff_lexp (LEXP_aux (LEXP_tup es,annot))))
-    | LEXP_cast (typ,id) -> 
+    | LEXP_cast (typ,id) ->
        k (fix_eff_lexp (LEXP_aux (LEXP_cast (typ,id),annot)))
     | LEXP_vector (lexp,e) ->
-       n_lexp lexp (fun lexp -> 
-       n_exp_name e (fun e -> 
+       n_lexp lexp (fun lexp ->
+       n_exp_name e (fun e ->
        k (fix_eff_lexp (LEXP_aux (LEXP_vector (lexp,e),annot)))))
     | LEXP_vector_range (lexp,e1,e2) ->
        n_lexp lexp (fun lexp ->
@@ -2708,12 +2708,12 @@ let rewrite_defs_letbind_effects =
         annot_exp (E_internal_return exp) l (env_of exp) (typ_of exp)
       else
         exp in
-    (* n_exp_term forces an expression to be translated into a form 
+    (* n_exp_term forces an expression to be translated into a form
        "let .. let .. let .. in EXP" where EXP has no effect and does not update
        variables *)
     n_exp_pure exp (fun exp -> exp)
 
-  and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp = 
+  and n_exp (E_aux (exp_aux,annot) as exp : 'a exp) (k : 'a exp -> 'a exp) : 'a exp =
 
     let rewrap e = fix_eff_exp (E_aux (e,annot)) in
 
@@ -3626,7 +3626,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
               ("Failed to look up type of variable " ^ string_of_id id)) in
        if effectful exp then
          Same_vars (E_aux (E_assign (lexp,vexp),annot))
-       else 
+       else
          (match lexp with
           | LEXP_aux (LEXP_id id,annot) ->
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
@@ -3640,7 +3640,7 @@ let rec rewrite_var_updates ((E_aux (expaux,((l,_) as annot))) as exp) =
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
              Added_vars (vexp,pat)
           | LEXP_aux (LEXP_vector_range (LEXP_aux (LEXP_id id,((l2,_) as annot2)),i,j),
-                      ((l,_) as annot)) -> 
+                      ((l,_) as annot)) ->
              let eid = annot_exp (E_id id) l2 env (typ_of_annot annot2) in
              let vexp = annot_exp (E_vector_update_subrange (eid,i,j,vexp)) l env (typ_of_annot annot) in
              let pat = annot_pat (P_id id) pl env (typ_of vexp) in
@@ -4153,7 +4153,7 @@ let make_cstr_mappings env ids m =
 let ctx_from_pattern_completeness_ctx env =
   let ctx = Env.pattern_completeness_ctx env in
   { env = env;
-    enum_to_rest = Bindings.fold (fun _ ids m -> make_enum_mappings ids m) 
+    enum_to_rest = Bindings.fold (fun _ ids m -> make_enum_mappings ids m)
       ctx.Pattern_completeness.enums Bindings.empty;
     constructor_to_rest = Bindings.fold (fun _ ids m -> make_cstr_mappings env ids m)
       ctx.Pattern_completeness.variants Bindings.empty
@@ -4192,9 +4192,9 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
      | RP_lit RL_inf -> [res_pat]
      | RP_lit lit' -> if lit' = rlit_of_lit lit then [] else [res_pat]
      | _ -> inconsistent ())
-  | P_as (p,_) 
+  | P_as (p,_)
   | P_typ (_,p)
-  | P_var (p,_) 
+  | P_var (p,_)
     -> remove_clause_from_pattern ctx p res_pat
   | P_id id ->
      (match Env.lookup_id id ctx.env with
@@ -4205,7 +4205,7 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
         | _ -> inconsistent ())
      | _ -> assert false)
   | P_tup rm_pats ->
-     let previous_res_pats = 
+     let previous_res_pats =
        match res_pat with
        | RP_tup res_pats -> res_pats
        | RP_any -> List.map (fun _ -> RP_any) rm_pats
@@ -4236,7 +4236,7 @@ let rec remove_clause_from_pattern ctx (P_aux (rm_pat,ann)) res_pat =
         | RP_nil -> []
         | _ -> inconsistent ())
   | P_cons (p1,p2) -> begin
-     let rp',rps = 
+     let rp',rps =
        match res_pat with
        | RP_cons (rp1,rp2) -> [], Some [rp1;rp2]
        | RP_any -> [RP_nil], Some [RP_any;RP_any]
@@ -4268,7 +4268,7 @@ let process_pexp env =
   (*let _ = print_endline ("res_pats: " ^ String.concat "; " (List.map string_of_rp rps)) in
     let _ = print_endline ("pat: " ^ string_of_pexp patexp) in*)
   match patexp with
-  | Pat_aux (Pat_exp (p,_),_) -> 
+  | Pat_aux (Pat_exp (p,_),_) ->
      List.concat (List.map (remove_clause_from_pattern ctx p) rps)
   | Pat_aux (Pat_when _,(l,_)) ->
      raise (Reporting_basic.err_unreachable l
@@ -4562,6 +4562,8 @@ let rewrite_defs_interpreter = [
     ("trivial_sizeof", rewrite_trivial_sizeof);
     ("sizeof", rewrite_sizeof);
   ]
+
+let rewrite_defs_fstar = []
 
 let rewrite_check_annot =
   let check_annot exp =

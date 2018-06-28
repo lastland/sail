@@ -49,3 +49,4 @@
 (**************************************************************************)
 
 include Pretty_print_lem
+include Pretty_print_fstar

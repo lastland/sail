@@ -54,6 +54,7 @@ open Pretty_print_common
 type out_type =
   | Lem_out of string list
   | Coq_out of string list
+  | FStar_out
 
 let get_lexbuf f =
   let in_chan = open_in f in
@@ -324,6 +325,17 @@ let output_coq filename libs defs =
   close_output_with_check ext_ot;
   close_output_with_check ext_o
 
+let output_fstar filename defs =
+  let generated_line = generated_line filename in
+  (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
+  let base_imports = [] in
+  let ((o,_, _) as ext_o) =
+    open_output_with_check_unformatted (filename ^ ".fst") in
+  (Pretty_print.pp_defs_fstar
+     (o, base_imports)
+     defs generated_line);
+  close_output_with_check ext_o
+
 let rec iterate (f : int -> unit) (n : int) : unit =
   if n = 0 then ()
   else (f n; iterate f (n - 1))
@@ -335,6 +347,8 @@ let output1 libpath out_arg filename defs  =
      output_lem f' libs defs
   | Coq_out libs ->
      output_coq f' libs defs
+  | FStar_out ->
+     output_fstar f' defs
 
 let output libpath out_arg files =
   List.iter
@@ -371,6 +385,8 @@ let rewrite_ast_c ast =
   ast
   |> rewrite Rewrites.rewrite_defs_c
   |> rewrite [("constant_fold", Constant_fold.rewrite_constant_function_calls)]
+  |> Constant_fold.rewrite_constant_function_calls
+let rewrite_ast_fstar = rewrite Rewrites.rewrite_defs_fstar
 
 let rewrite_ast_interpreter = rewrite Rewrites.rewrite_defs_interpreter
 let rewrite_ast_check = rewrite Rewrites.rewrite_defs_check
