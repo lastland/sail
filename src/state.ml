@@ -104,6 +104,7 @@ let typ_is_bit t =
 
 let count_register typ id =
   match typ_is_vector typ with
+  | None -> None
   | Some (n, t) ->
      if typ_is_bit t then
        Some { regid = id; regnum = 1; reglen = n }
@@ -113,7 +114,6 @@ let count_register typ id =
                Some { regid = id; regnum = n; reglen = m }
              else None
           | None -> None
-   | None -> None
 
 let rec flat_option_list (l : ('a option) list) : 'a list  =
   match l with
