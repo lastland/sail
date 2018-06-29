@@ -58,6 +58,8 @@ open PPrint
 open Pretty_print_common
 open Pretty_print_sail
 
+type reg_info = { regid : id; regnum: int; reglen: int }
+
 let defs_of_string = ast_of_def_string Ast_util.inc_ord
 
 let is_defined defs name = IdSet.mem (mk_id name) (ids_of_defs (Defs defs))
@@ -78,29 +80,54 @@ let find_registers defs =
       | _ -> acc
     ) [] defs
 
-let count_register typ =
+(* assuming [typ] has benn expanded synonyms *)
+let typ_is_vector typ =
   match typ with
   | Typ_aux (Typ_app (id, args), _) ->
      (match id with
       | Id_aux (Id x, _) ->
          if x = "vector" then
            match args with
-           | h :: args' ->
-              (match h with
-               | Typ_arg_aux (Typ_arg_nexp (Nexp_aux ((Nexp_constant n), _)), _) ->
-                  Big_int.to_int n
-               | _ -> 0) (* TODO: reconsider *)
-           | _ -> 0 (* TODO: reconsider *)
-         else 1 (* TODO: other types? *)
-      | _ -> 1)
-  | _ -> 1
+           | (Typ_arg_aux (Typ_arg_nexp (Nexp_aux (Nexp_constant n, _)), _))
+             :: _ :: (Typ_arg_aux (Typ_arg_typ t, _)) :: args' ->
+              Some (Nat_big_num.to_int n, t)
+           | _ -> None
+         else None
+      | _ -> None)
+  | _ -> None
 
-let count_registers defs =
+let typ_is_bit t =
+  match t with
+    (Typ_aux (Typ_id (Id_aux (Id y, _)), _)) ->
+     y = "bit"
+  | _ -> false
+
+let count_register typ id =
+  match typ_is_vector typ with
+  | Some (n, t) ->
+     if typ_is_bit t then
+       Some { regid = id; regnum = 1; reglen = n }
+     else match typ_is_vector t with
+          | Some (m, t') ->
+             if typ_is_bit t' then
+               Some { regid = id; regnum = n; reglen = m }
+             else None
+          | None -> None
+   | None -> None
+
+let rec flat_option_list (l : ('a option) list) : 'a list  =
+  match l with
+  | [] -> []
+  | None :: l' -> flat_option_list l'
+  | Some a :: l' -> a :: flat_option_list l'
+
+let count_registers (Defs defs) =
   let regs = find_registers defs in
-  List.fold_left
-    (fun acc (typ, _) ->
-      (count_register typ) :: acc
-    ) [] regs
+  flat_option_list
+    (List.fold_left
+       (fun acc (typ, id) ->
+         (count_register typ id) :: acc
+       ) [] regs)
 
 let generate_regstate = function
   | [] -> ["type regstate = unit"]

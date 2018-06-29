@@ -54,7 +54,7 @@ open Pretty_print_common
 type out_type =
   | Lem_out of string list
   | Coq_out of string list
-  | FStar_out
+  | FStar_out of (State.reg_info) list
 
 let get_lexbuf f =
   let in_chan = open_in f in
@@ -325,7 +325,7 @@ let output_coq filename libs defs =
   close_output_with_check ext_ot;
   close_output_with_check ext_o
 
-let output_fstar filename defs =
+let output_fstar filename regs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let base_imports = [] in
@@ -333,7 +333,7 @@ let output_fstar filename defs =
     open_output_with_check_unformatted (filename ^ ".fst") in
   (Pretty_print.pp_defs_fstar
      (o, base_imports)
-     defs generated_line);
+     regs defs generated_line);
   close_output_with_check ext_o
 
 let rec iterate (f : int -> unit) (n : int) : unit =
@@ -347,8 +347,8 @@ let output1 libpath out_arg filename defs  =
      output_lem f' libs defs
   | Coq_out libs ->
      output_coq f' libs defs
-  | FStar_out ->
-     output_fstar f' defs
+  | FStar_out regs ->
+     output_fstar f' regs defs
 
 let output libpath out_arg files =
   List.iter

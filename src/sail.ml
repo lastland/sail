@@ -332,9 +332,9 @@ let main() =
        else ());
       (if !(opt_print_fstar)
        then
-         let type_envs, ast_fstar = State.add_regstate_defs true type_envs ast in
-         let ast_fstar = rewrite_ast_fstar ast_fstar in
-         output "" FStar_out [out_name, ast_fstar]
+         let regs = State.count_registers ast in
+         let ast_fstar = rewrite_ast_fstar ast in
+         output "" (FStar_out regs) [out_name, ast_fstar]
        else ());
       (if !(opt_print_latex)
        then

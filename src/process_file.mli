@@ -73,7 +73,7 @@ val opt_dno_cast : bool ref
 type out_type =
   | Lem_out of string list (* If present, the strings are files to open in the lem backend*)
   | Coq_out of string list (* If present, the strings are files to open in the coq backend*)
-  | FStar_out
+  | FStar_out of (State.reg_info) list
 
 val output :
   string ->                           (* The path to the library *)
