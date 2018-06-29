@@ -206,7 +206,7 @@ let options = Arg.align ([
   ( "-ddump_tc_ast",
     Arg.Set opt_ddump_tc_ast,
     " (debug) dump the typechecked ast to stdout");
-  ( "-ddump_rewrtie_ast",
+  ( "-ddump_rewrite_ast",
     Arg.String (fun l -> opt_ddump_rewrite_ast := Some (l, 0)),
     "<prefix> (debug) dump the ast after each rewriting step to <prefix>_<i>.lem");
   ( "-ddump_flow_graphs",
