@@ -33,7 +33,7 @@ let rec pp_regval_rec o regs =
   match regs with
   | [] -> ()
   | r :: regs' ->
-     fprintf o "@\n@[| r%s -> bits(%u)@]" (get_id_string r.regid) r.reglen;
+     fprintf o "@\n@[| r%s -> bits %u@]" (get_id_string r.regid) r.reglen;
      pp_regval_rec o regs'
 
 let pp_regval o regs =
@@ -43,7 +43,8 @@ let pp_regval o regs =
 
 let pp_defs_fstar (defs_file,defs_modules) regs defs top_line =
   let o = formatter_of_out_channel defs_file in
-  fprintf o "@[let@ n_reg_t@ :@ pos = %u@]@\n" (length regs);
+  fprintf o "module Regs\n\nopen Types\n";
+  fprintf o "@\n@[let@ n_reg_t@ :@ pos = %u@]@\n" (length regs);
   pp_regnames o regs 0;
   pp_n_regtype o regs;
   pp_regval o regs;
