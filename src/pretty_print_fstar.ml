@@ -13,7 +13,7 @@ let rec pp_n_regtype_rec o regs n =
      pp_n_regtype_rec o regs' (n+1)
 
 let pp_n_regtype o regs =
-  fprintf o "@[<hov 2>let n_regtype (n : reg_t) : pos =@;match n with";
+  fprintf o "@[<hov 2>let n_regtype (n : reg_t) : pos =@ match n with";
   pp_n_regtype_rec o regs 0;
   fprintf o "@]@\n"
 
@@ -35,7 +35,7 @@ let rec pp_regval_rec o regs n =
      pp_regval_rec o regs' (n+1)
 
 let pp_regval o regs =
-  fprintf o "@\n@[<hov 2>let regval (n : reg_t) : Type0 =@;match n with";
+  fprintf o "@\n@[<hov 2>let regval (n : reg_t) : Type0 =@ match n with";
   pp_regval_rec o regs 0;
   fprintf o "@]@\n"
 
