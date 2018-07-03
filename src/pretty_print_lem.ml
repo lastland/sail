@@ -194,7 +194,7 @@ let doc_nexp_lem nexp =
        | Nexp_neg n -> "neg_" ^ mangle_nexp n
        | _ ->
           raise (Reporting_basic.err_unreachable l
-                   ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\"")) 
+                   ("cannot pretty-print nexp \"" ^ string_of_nexp full_nexp ^ "\""))
      end in
      string ("'" ^ mangle_nexp full_nexp)
 
@@ -227,8 +227,7 @@ let rec lem_nexps_of_typ (Typ_aux (t,_)) =
     Typ_arg_aux (Typ_arg_order ord, _);
     Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
      let m = nexp_simp m in
-     if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then
-       NexpSet.singleton (orig_nexp m)
+     if !opt_mwords && is_bit_typ elem_typ && not (is_nexp_constant m) then       NexpSet.singleton (orig_nexp m)
      else trec elem_typ
   | Typ_app(Id_aux (Id "register", _), [Typ_arg_aux (Typ_arg_typ etyp, _)]) ->
      trec etyp
@@ -338,7 +337,7 @@ let replace_typ_size ctxt env (Typ_aux (t,a)) =
   match t with
   | Typ_app (Id_aux (Id "vector",_) as id, [Typ_arg_aux (Typ_arg_nexp size,_);ord;typ']) ->
      begin
-       let mk_typ nexp = 
+       let mk_typ nexp =
          Some (Typ_aux (Typ_app (id, [Typ_arg_aux (Typ_arg_nexp nexp,Parse_ast.Unknown);ord;typ']),a))
        in
        match Type_check.solve env size with
@@ -753,7 +752,7 @@ let doc_exp_lem, doc_let_lem =
                | [] -> doc_id_lem_ctor f
                | [arg] -> doc_id_lem_ctor f ^^ space ^^ expV true arg
                | _ ->
-                  doc_id_lem_ctor f ^^ space ^^ 
+                  doc_id_lem_ctor f ^^ space ^^
                     parens (separate_map comma (expV false) args) in
              wrap_parens (align epp)
           | _ ->
@@ -1211,7 +1210,7 @@ let doc_typdef_lem (TD_aux(td, (l, annot))) = match td with
                       string "let fromInterpValue = ";fromInterpValueF]))
            ^/^ string "end" in
           typ_pp ^^ hardline ^^ hardline ^^
-            if !print_to_from_interp_value 
+            if !print_to_from_interp_value
             then toInterpValuePP ^^ hardline ^^ hardline ^^
               fromInterpValuePP ^^ hardline ^^ hardline ^^
                 fromToInterpValuePP ^^ hardline
@@ -1289,7 +1288,7 @@ module StringSet = Set.Make(String)
 
 (* Strictly speaking, Lem doesn't support multiple clauses for a single function
    joined by "and", although it has worked for Isabelle before.  However, all
-   the funcls should have been merged by the merge_funcls rewrite now. *)   
+   the funcls should have been merged by the merge_funcls rewrite now. *)
 let doc_fundef_rhs_lem (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
   separate_map (hardline ^^ string "and ") doc_funcl_lem funcls
 
@@ -1299,7 +1298,7 @@ let doc_mutrec_lem = function
      string "let rec " ^^
      separate_map (hardline ^^ string "and ") doc_fundef_rhs_lem fundefs
 
-let rec doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
+let doc_fundef_lem (FD_aux(FD_function(r, typa, efa, fcls),fannot) as fd) =
   match fcls with
   | [] -> failwith "FD_function with empty function list"
   | FCL_aux (FCL_Funcl(id,_),annot) :: _
@@ -1340,7 +1339,7 @@ let doc_spec_lem (VS_aux (valspec,annot)) =
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)
      doc_docstring_lem annot ^^
-     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem true typschm] ^/^ hardline 
+     separate space [string "val"; doc_id_lem id; string ":";doc_typschm_lem true typschm] ^/^ hardline
   (* | VS_val_spec (_,_,Some _,_) -> empty *)
   | _ -> empty
 

@@ -329,11 +329,14 @@ let output_fstar filename regs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
   let base_imports = [] in
+  let ((ro,_,_) as ext_ro) =
+    open_output_with_check_unformatted ("Regs.fst") in
   let ((o,_, _) as ext_o) =
     open_output_with_check_unformatted (filename ^ ".fst") in
   (Pretty_print.pp_defs_fstar
-     (o, base_imports)
+     (ro, o, base_imports)
      regs defs generated_line);
+  close_output_with_check ext_ro;
   close_output_with_check ext_o
 
 let rec iterate (f : int -> unit) (n : int) : unit =

@@ -4563,7 +4563,15 @@ let rewrite_defs_interpreter = [
     ("sizeof", rewrite_sizeof);
   ]
 
-let rewrite_defs_fstar = []
+let rewrite_defs_fstar = [
+    ("vector_concat_assignments", rewrite_vector_concat_assignments);
+    ("remove_vector_concat", rewrite_defs_remove_vector_concat);
+    ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
+    ("guarded_pats", rewrite_defs_guarded_pats);
+    ("recheck_defs", recheck_defs);
+    ("merge function clauses", merge_funcls);
+    ("recheck_defs", recheck_defs)
+  ]
 
 let rewrite_check_annot =
   let check_annot exp =
