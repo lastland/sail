@@ -526,7 +526,7 @@ let doc_spec (VS_aux (v, annot)) =
   let doc_extern ext =
     let doc_backend b = Util.option_map (fun id -> string (b ^ ":") ^^ space ^^
       utf8string ("\"" ^ String.escaped id ^  "\"")) (ext b) in
-    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"; "c"]) in
+    let docs = Util.option_these (List.map doc_backend ["ocaml"; "lem"; "smt"; "interpreter"; "c"; "fstar"]) in
     if docs = [] then empty else equals ^^ space ^^ braces (separate (comma ^^ space) docs)
   in
   match v with

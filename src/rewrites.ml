@@ -4564,10 +4564,12 @@ let rewrite_defs_interpreter = [
   ]
 
 let rewrite_defs_fstar = [
+    ("remove_mapping_valspecs", remove_mapping_valspecs);
     ("vector_concat_assignments", rewrite_vector_concat_assignments);
     ("remove_vector_concat", rewrite_defs_remove_vector_concat);
     ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
     ("guarded_pats", rewrite_defs_guarded_pats);
+    ("bitvector_exps", rewrite_bitvector_exps);
     ("recheck_defs", recheck_defs);
     ("merge function clauses", merge_funcls);
     ("recheck_defs", recheck_defs)

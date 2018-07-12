@@ -64,18 +64,18 @@ function def_spc_backwards s = ()
 val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
 
 
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb", fstar: "op_Equality"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
-val eq_int = {ocaml: "eq_int", lem: "eq"} : (int, int) -> bool
-val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit"} : (bit, bit) -> bool
+val eq_int = {ocaml: "eq_int", lem: "eq", fstar: "op_Equality"} : (int, int) -> bool
+val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", fstar: "op_Equality"} : (bit, bit) -> bool
 
-val eq_vec = {ocaml: "eq_list", lem: "eq_vec"} : forall 'n. (bits('n), bits('n)) -> bool
+val eq_vec = {ocaml: "eq_list", lem: "eq_vec", fstar: "op_Equality"} : forall 'n. (bits('n), bits('n)) -> bool
 
-val eq_string = {ocaml: "eq_string", lem: "eq"} : (string, string) -> bool
+val eq_string = {ocaml: "eq_string", lem: "eq", fstar: "op_Equality"} : (string, string) -> bool
 val string_startswith = "string_startswith" : (string, string) -> bool
 val string_drop = "string_drop" : (string, nat) -> string
 val string_length = "string_length" : string -> nat
@@ -85,13 +85,13 @@ val maybe_nat_of_prefix = "maybe_nat_of_prefix" : string -> option((nat, nat))
 val maybe_int_of_string = "maybe_int_of_string" : string -> option(int)
 
 
-val eq_real = {ocaml: "eq_real", lem: "eq"} : (real, real) -> bool
+val eq_real = {ocaml: "eq_real", lem: "eq", fstar: "op_Equality"} : (real, real) -> bool
 
-val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq"} : forall ('a : Type). ('a, 'a) -> bool
+val eq_anything = {ocaml: "(fun (x, y) -> x = y)", lem: "eq", fstar: "op_Equality"} : forall ('a : Type). ('a, 'a) -> bool
 
-val bitvector_length = {ocaml: "length", lem: "length"} : forall 'n. bits('n) -> atom('n)
-val vector_length = {ocaml: "length", lem: "length_list"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
-val list_length = {ocaml: "length", lem: "length_list"} : forall ('a : Type). list('a) -> int
+val bitvector_length = {ocaml: "length", lem: "length", fstar: "FStar.Seq.length"} : forall 'n. bits('n) -> atom('n)
+val vector_length = {ocaml: "length", lem: "length_list", fstar: "FStar.List.length"} : forall 'n ('a : Type). vector('n, dec, 'a) -> atom('n)
+val list_length = {ocaml: "length", lem: "length_list", fstar: "FStar.List.length"} : forall ('a : Type). list('a) -> int
 
 overload length = {bitvector_length, vector_length, list_length}
 
@@ -101,18 +101,18 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", fstar: "sub_bv"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
-val bitvector_access = {ocaml: "access", lem: "access_vec_dec"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
+val bitvector_access = {ocaml: "access", lem: "access_vec_dec", fstar: "FStar.Seq.index"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
   (bits('n), atom('m)) -> bit
 
-val any_vector_access = {ocaml: "access", lem: "access_list_dec"} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
+val any_vector_access = {ocaml: "access", lem: "access_list_dec", fstar: "FStar.List.index"} : forall ('n : Int) ('m : Int) ('a : Type), 0 <= 'm < 'n.
   (vector('n, dec, 'a), atom('m)) -> 'a
 
 overload vector_access = {bitvector_access, any_vector_access}
 
-val bitvector_update = {ocaml: "update", lem: "update_vec_dec"} : forall 'n.
+val bitvector_update = {ocaml: "update", lem: "update_vec_dec", fstar: "FStar.Seq.upd"} : forall 'n.
   (bits('n), int, bit) -> bits('n)
 
 val any_vector_update = {ocaml: "update", lem: "update_list_dec"} : forall 'n ('a : Type).
@@ -140,7 +140,7 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_atom = {lem: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val neq_atom = {lem: "neq", fstar: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
@@ -148,7 +148,7 @@ val neq_int = {lem: "neq"} : (int, int) -> bool
 
 function neq_int (x, y) = not_bool(eq_int(x, y))
 
-val neq_vec = {lem: "neq"} : forall 'n. (bits('n), bits('n)) -> bool
+val neq_vec = {lem: "neq", fstar: "bvnot"} : forall 'n. (bits('n), bits('n)) -> bool
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
@@ -160,7 +160,7 @@ overload operator != = {neq_atom, neq_int, neq_vec, neq_anything}
 
 val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
-val builtin_and_vec = {ocaml: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_and_vec = {ocaml: "and_vec", fstar: "bvand"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
@@ -170,7 +170,7 @@ overload operator & = {and_bool, and_vec}
 
 val or_bool = {coq: "orb", _:"or_bool"} : (bool, bool) -> bool
 
-val builtin_or_vec = {ocaml: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val builtin_or_vec = {ocaml: "or_vec", fstar: "bvor"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 val or_vec = {lem: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 

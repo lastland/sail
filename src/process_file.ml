@@ -328,13 +328,17 @@ let output_coq filename libs defs =
 let output_fstar filename regs defs =
   let generated_line = generated_line filename in
   (* let seq_suffix = if !Pretty_print_lem.opt_sequential then "_sequential" else "" in *)
-  let base_imports = [] in
+  let regs_filename = "Regs" in
+  let types_filename = "Types" in
+  let state_filename = "State" in
+  let bv_module = "FStar.BitVector" in
+  let base_imports = [regs_filename; types_filename; state_filename] in
   let ((ro,_,_) as ext_ro) =
-    open_output_with_check_unformatted ("Regs.fst") in
+    open_output_with_check_unformatted (regs_filename ^ ".fst") in
   let ((o,_, _) as ext_o) =
     open_output_with_check_unformatted (filename ^ ".fst") in
   (Pretty_print.pp_defs_fstar
-     (ro, o, base_imports)
+     (ro, (o, String.capitalize_ascii filename), base_imports)
      regs defs generated_line);
   close_output_with_check ext_ro;
   close_output_with_check ext_o
