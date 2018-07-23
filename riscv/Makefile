@@ -7,6 +7,12 @@ export SAIL_DIR
 
 all: platform Riscv.thy
 
+fstar:
+	$(SAIL) $(SAIL_FLAGS) $(SAIL_SRCS) -fstar -o riscv_duopod
+
+fstar-check: riscv_duopod.fst
+
+
 check: $(SAIL_SRCS) main.sail Makefile
 	$(SAIL) $(SAIL_FLAGS) $(SAIL_SRCS) main.sail
 

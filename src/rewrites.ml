@@ -2534,6 +2534,20 @@ let rewrite_tuple_assignments defs =
   let assign_defs = { rewriters_base with rewrite_exp = (fun _ -> fold_exp assign_exp) } in
   rewrite_defs_base assign_defs defs
 
+let rewrite_vector_literal_to_local_var defs =
+  let vector_exp_aux e_aux annot =
+    match e_aux with
+    | E_vector lst as exp ->
+       let id = fresh_id "l__" Parse_ast.Unknown in
+       E_aux (E_let (LB_aux (LB_val (P_aux (P_id id, annot), E_aux (exp, annot)), annot), E_aux (E_id id, annot)), annot)
+    | _ -> E_aux (e_aux, annot) in
+  let vector_exp = {
+      id_exp_alg with
+      e_aux = (fun (e_aux, annot) -> vector_exp_aux e_aux annot)
+    } in
+  let rewrite_vectors = { rewriters_base with rewrite_exp = (fun _ -> fold_exp vector_exp) } in
+  rewrite_defs_base rewrite_vectors defs
+
 let rewrite_simple_assignments defs =
   let assign_e_aux e_aux annot =
     let env = env_of_annot annot in
@@ -3824,7 +3838,7 @@ let merge_funcls (Defs defs) =
     match fcls with
     | [] | [_] -> f
     | (FCL_aux (FCL_Funcl (id,_),(l,_)))::_ ->
-       let var = mk_id "merge#var" in
+       let var = mk_id "merge_var" in
        let l_g = Parse_ast.Generated l in
        let ann_g : _ * tannot = (l_g,empty_tannot) in
        let clauses = List.map (fun (FCL_aux (FCL_Funcl (_,pexp),_)) -> pexp) fcls in
@@ -4566,11 +4580,23 @@ let rewrite_defs_interpreter = [
 let rewrite_defs_fstar = [
     ("remove_mapping_valspecs", remove_mapping_valspecs);
     ("vector_concat_assignments", rewrite_vector_concat_assignments);
+    ("simple_assignments", rewrite_simple_assignments);
     ("remove_vector_concat", rewrite_defs_remove_vector_concat);
     ("remove_bitvector_pats", rewrite_defs_remove_bitvector_pats);
     ("guarded_pats", rewrite_defs_guarded_pats);
     ("bitvector_exps", rewrite_bitvector_exps);
+    ("fix_val_specs", rewrite_fix_val_specs);
+    ("split_execute", rewrite_split_fun_constr_pats "execute");
     ("recheck_defs", recheck_defs);
+    ("rewrite vector literals to let", rewrite_vector_literal_to_local_var);
+    ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+    ("fix_val_specs", rewrite_fix_val_specs);
+    ("remove_blocks", rewrite_defs_remove_blocks);
+    ("letbind_effects", rewrite_defs_letbind_effects);
+    ("remove_e_assign", rewrite_defs_remove_e_assign);
+    ("internal_lets", rewrite_defs_internal_lets);
+    ("remove_superfluous_letbinds", rewrite_defs_remove_superfluous_letbinds);
+    ("remove_superfluous_returns", rewrite_defs_remove_superfluous_returns);
     ("merge function clauses", merge_funcls);
     ("recheck_defs", recheck_defs)
   ]

@@ -331,8 +331,8 @@ let output_fstar filename regs defs =
   let regs_filename = "Regs" in
   let types_filename = "Types" in
   let state_filename = "State" in
-  let bv_module = "FStar.BitVector" in
-  let base_imports = [regs_filename; types_filename; state_filename] in
+  let bv_module1 = "FStar.BV" in
+  let base_imports = [bv_module1; regs_filename; types_filename; state_filename] in
   let ((ro,_,_) as ext_ro) =
     open_output_with_check_unformatted (regs_filename ^ ".fst") in
   let ((o,_, _) as ext_o) =

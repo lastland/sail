@@ -101,7 +101,7 @@ val _reg_deref = "reg_deref" : forall ('a : Type). register('a) -> 'a
 
 overload operator == = {eq_atom, eq_int, eq_bit, eq_vec, eq_string, eq_real, eq_anything}
 
-val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", fstar: "sub_bv"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
+val vector_subrange = {ocaml: "subrange", lem: "subrange_vec_dec", fstar: "FStar.Seq.slice"} : forall ('n : Int) ('m : Int) ('o : Int), 'o <= 'm <= 'n.
   (bits('n), atom('m), atom('o)) -> bits('m - ('o - 1))
 
 val bitvector_access = {ocaml: "access", lem: "access_vec_dec", fstar: "FStar.Seq.index"} : forall ('n : Int) ('m : Int), 0 <= 'm < 'n.
@@ -115,21 +115,21 @@ overload vector_access = {bitvector_access, any_vector_access}
 val bitvector_update = {ocaml: "update", lem: "update_vec_dec", fstar: "FStar.Seq.upd"} : forall 'n.
   (bits('n), int, bit) -> bits('n)
 
-val any_vector_update = {ocaml: "update", lem: "update_list_dec"} : forall 'n ('a : Type).
+val any_vector_update = {ocaml: "update", lem: "update_list_dec", fstar: "update_list"} : forall 'n ('a : Type).
   (vector('n, dec, 'a), int, 'a) -> vector('n, dec, 'a)
 
 overload vector_update = {bitvector_update, any_vector_update}
 
-val update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec"} : forall 'n 'm 'o.
+val update_subrange = {ocaml: "update_subrange", lem: "update_subrange_vec_dec", fstar: "FStar.Seq.upd"} : forall 'n 'm 'o, 0 <= 'o <= 'm < 'n.
   (bits('n), atom('m), atom('o), bits('m - ('o - 1))) -> bits('n)
 
-val vcons = {lem: "cons_vec"} : forall ('n : Int) ('a : Type).
+val vcons = {lem: "cons_vec", fstar: "Cons"} : forall ('n : Int) ('a : Type).
   ('a, vector('n, dec, 'a)) -> vector('n + 1, dec, 'a)
 
-val bitvector_concat = {ocaml: "append", lem: "concat_vec"} : forall ('n : Int) ('m : Int).
+val bitvector_concat = {ocaml: "append", lem: "concat_vec", fstar: "append"} : forall ('n : Int) ('m : Int).
   (bits('n), bits('m)) -> bits('n + 'm)
 
-val vector_concat = {ocaml: "append", lem: "append_list"} : forall ('n : Int) ('m : Int) ('a : Type).
+val vector_concat = {ocaml: "append", lem: "append_list", fstar: "append"} : forall ('n : Int) ('m : Int) ('a : Type).
   (vector('n, dec, 'a), vector('m, dec, 'a)) -> vector('n + 'm, dec, 'a)
 
 overload append = {bitvector_concat, vector_concat}
@@ -140,11 +140,11 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_atom = {lem: "neq", fstar: "neq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val neq_atom = {lem: "neq", fstar: "op_disEquality"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
-val neq_int = {lem: "neq"} : (int, int) -> bool
+val neq_int = {lem: "neq", fstar: "op_disEquality"} : (int, int) -> bool
 
 function neq_int (x, y) = not_bool(eq_int(x, y))
 
@@ -152,7 +152,7 @@ val neq_vec = {lem: "neq", fstar: "bvnot"} : forall 'n. (bits('n), bits('n)) -> 
 
 function neq_vec (x, y) = not_bool(eq_vec(x, y))
 
-val neq_anything = {lem: "neq"} : forall ('a : Type). ('a, 'a) -> bool
+val neq_anything = {lem: "neq", fstar: "op_disEquality"} : forall ('a : Type). ('a, 'a) -> bool
 
 function neq_anything (x, y) = not_bool(x == y)
 
@@ -162,7 +162,7 @@ val and_bool = {coq: "andb", _: "and_bool"} : (bool, bool) -> bool
 
 val builtin_and_vec = {ocaml: "and_vec", fstar: "bvand"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val and_vec = {lem: "and_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val and_vec = {lem: "and_vec", fstar: "bvand"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function and_vec (xs, ys) = builtin_and_vec(xs, ys)
 
@@ -172,7 +172,7 @@ val or_bool = {coq: "orb", _:"or_bool"} : (bool, bool) -> bool
 
 val builtin_or_vec = {ocaml: "or_vec", fstar: "bvor"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
-val or_vec = {lem: "or_vec"} : forall 'n. (bits('n), bits('n)) -> bits('n)
+val or_vec = {lem: "or_vec", fstar: "bvor"} : forall 'n. (bits('n), bits('n)) -> bits('n)
 
 function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 

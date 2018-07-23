@@ -23,7 +23,6 @@ val n_regtype : reg_t -> pos
 
 type regtyp (t:reg_t) = n:nat{n < n_regtype t}
 
-(* why [list (regtyp t)] does not work here? *)
 let reglist (t:reg_t) : list (regtyp t) = range (n_regtype t)
 
 let lemma_reglist_complete : t:reg_t -> Lemma

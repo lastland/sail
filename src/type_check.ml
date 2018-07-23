@@ -2035,7 +2035,7 @@ let rec instantiate_quants quants kid uvar = match quants with
      end
 
 let instantiate_simple_equations =
-  let rec find_eqs kid (NC_aux (nc,_)) = 
+  let rec find_eqs kid (NC_aux (nc,_)) =
     match nc with
     | NC_equal (Nexp_aux (Nexp_var kid',_), nexp)
         when Kid.compare kid kid' == 0 &&
@@ -2789,7 +2789,7 @@ and bind_pat env (P_aux (pat_aux, (l, ())) as pat) (Typ_aux (typ_aux, _) as typ)
           end
        | _ -> typ_error l ("Mal-formed mapping " ^ string_of_id f)
      end
-    
+
   | P_app (f, _) when (not (Env.is_union_constructor f env) && not (Env.is_mapping f env)) ->
      typ_error l (string_of_id f ^ " is not a union constructor or mapping in pattern " ^ string_of_pat pat)
   | P_as (pat, id) ->
@@ -3422,7 +3422,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let instantiate_ret env quants typs ret_typ =
     match ret_ctx_typ with
     | None -> (quants, typs, ret_typ, env)
-    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env) 
+    | Some rct when is_exist (Env.expand_synonyms env rct) -> (quants, typs, ret_typ, env)
     | Some rct ->
        begin
          typ_debug (lazy ("RCT is " ^ string_of_typ rct));
@@ -3470,7 +3470,7 @@ and infer_funapp' l env f (typq, f_typ) xs ret_ctx_typ =
   let ty_vars = List.map fst (KBindings.bindings (Env.get_typ_vars env)) in
   let existentials = List.filter (fun kid -> not (KBindings.mem kid universals)) ty_vars in
   let num_new_ncs = List.length (Env.get_constraints env) - List.length universal_constraints in
-  let ex_constraints = take num_new_ncs (Env.get_constraints env) in 
+  let ex_constraints = take num_new_ncs (Env.get_constraints env) in
 
   typ_debug (lazy ("Existentials: " ^ string_of_list ", " string_of_kid existentials));
   typ_debug (lazy ("Existential constraints: " ^ string_of_list ", " string_of_n_constraint ex_constraints));
@@ -4085,7 +4085,7 @@ and propagate_mpat_effect_aux = function
      MP_as (p_mpat, id), effect_of_mpat mpat
   | _ -> typ_error Parse_ast.Unknown "Unimplemented: Cannot propagate effect in mpat"
 
-       
+
 and propagate_letbind_effect (LB_aux (lb, (l, annot))) =
   let p_lb, eff = propagate_letbind_effect_aux lb in
   match annot with
