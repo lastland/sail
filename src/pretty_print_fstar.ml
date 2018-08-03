@@ -9,7 +9,7 @@ open Pretty_print_common
 
 let arrow = string "->"
 
-let opt_env_of_annot (l, tannot) = match tannot with
+let opt_env_of_annot (l, tannot) = match destruct_tannot tannot with
   | Some (env, _, _) -> Some env
   | None -> None
 
@@ -219,13 +219,18 @@ let doc_typ_fstar, doc_typ_arg_fstar =
     | Typ_arg_order _ -> empty
   in typ_n, doc_typ_arg false
 
+(* let effect_of (E_aux (exp, (l, annot)) as e) =
+  match annot with
+  | Some (env, typ, eff) -> effect_of_annot (mk_tannot env typ eff)
+  | None -> no_effect *)
+
 let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   match exp with
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp_fstar exp;
                      string "with" ^^ hardline ^^ doc_pexps_fstar pexps]
   | E_app (f, args) ->
-     let call = match annot with
+     let call = match destruct_tannot annot with
        | Some (env, _, _) when Env.is_extern f env "fstar" ->
           string (Env.get_extern f env "fstar")
        | _ -> doc_id_fstar f in
@@ -240,7 +245,6 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
        string " then" ^^ break 1 ^^ parens (doc_exp_fstar e1) ^^ break 1 ^^
          string "else " ^^ parens (doc_exp_fstar e2)
   | E_cast (typ, e) -> doc_exp_fstar e
-  | E_internal_cast (typ, e) -> doc_exp_fstar e
   | E_assign (le, e) ->
      string "update_reg" ^^ space ^^ doc_lexp_fstar le ^^ space ^^ doc_exp_fstar e
   | E_let (LB_aux (LB_val (pat, e1), _), e2) ->
