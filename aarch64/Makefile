@@ -14,7 +14,7 @@ aarch64: no_vector.sail
 	$(SAIL) $^ -o aarch64 -ocaml -undefined_gen -no_lexp_bounds_check -memo_z3
 
 aarch64.lem: no_vector.sail
-	$(SAIL) $^ -o aarch64 -lem -lem_lib Aarch64_extras -memo_z3 -undefined_gen -no_lexp_bounds_check
+	$(SAIL) $^ -o aarch64 -fstar -lem -lem_lib Aarch64_extras -memo_z3 -undefined_gen -no_lexp_bounds_check
 aarch64_types.lem: aarch64.lem
 
 Aarch64.thy: aarch64_extras.lem aarch64_types.lem aarch64.lem

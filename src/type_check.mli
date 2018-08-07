@@ -109,6 +109,8 @@ module Env : sig
      error if the enumeration doesn't exist. *)
   val get_enum : id -> t -> id list
 
+  val is_enum : id -> t -> bool
+
   val get_locals : t -> (mut * typ) Bindings.t
 
   val add_local : id -> mut * typ -> t -> t

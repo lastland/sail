@@ -24,7 +24,10 @@ CHERI128_NO_TLB_SAILS:=$(SAIL_LIB_HEADERS) $(MIPS_PRE) $(MIPS_TLB_STUB) $(CHERI1
 CHERI_MAIN:=$(MIPS_SAIL_DIR)/main.sail
 
 cheri: $(CHERI_SAILS) $(CHERI_MAIN)
-	$(SAIL) -ocaml -o $@ $^
+	$(SAIL) -ddump_rewrite_ast $@ -ocaml -o $@ $^
+
+cheri.fst: $(CHERI_SAILS) $(CHERI_MAIN)
+	$(SAIL) -ddump_rewrite_ast cheri -fstar -o cheri $^
 
 cheri_coverage: $(CHERI_SAILS) $(CHERI_MAIN)
 	$(SAIL) -ocaml-coverage -ocaml -o $@ $^
@@ -121,6 +124,6 @@ C%.thy: c%.lem c%_types.lem $(MIPS_SAIL_DIR)/mips_extras.lem
 	Holmake $@
 
 clean:
-	rm -rf cheri cheri_trace cheri_coverage cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc coverage_report
+	rm -rf cheri cheri_trace cheri_coverage cheri128 cheri128_trace _sbuild inst_*.sail cheri.c sail_latex sail_latexcc coverage_report cheri.fst
 	rm -f cheriScript.sml cheri_typesScript.sml mips_extrasScript.sml
 	-Holmake cleanAll

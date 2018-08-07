@@ -389,6 +389,7 @@ module Env : sig
   val set_default_order_dec : t -> t
   val add_enum : id -> id list -> t -> t
   val get_enum : id -> t -> id list
+  val is_enum : id -> t -> bool
   val get_casts : t -> id list
   val allow_casts : t -> bool
   val no_casts : t -> t
@@ -915,6 +916,9 @@ end = struct
     try IdSet.elements (Bindings.find id env.enums)
     with
     | Not_found -> typ_error (id_loc id) ("Enumeration " ^ string_of_id id ^ " does not exist")
+
+  let is_enum id env : bool =
+    Bindings.exists (fun _ -> IdSet.mem id) env.enums
 
   let is_record id env = Bindings.mem id env.records
 

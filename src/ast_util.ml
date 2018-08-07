@@ -1081,7 +1081,7 @@ let rec tyvars_of_typ (Typ_aux (t,_)) =
   | Typ_tup ts ->
      List.fold_left (fun s t -> KidSet.union s (tyvars_of_typ t))
        KidSet.empty ts
-  | Typ_app (_,tas) -> 
+  | Typ_app (_,tas) ->
      List.fold_left (fun s ta -> KidSet.union s (tyvars_of_typ_arg ta))
        KidSet.empty tas
   | Typ_exist (kids, nc, t) ->
