@@ -450,8 +450,7 @@ let quant_and_constraints qs =
     match qs with
     | QI_aux (QI_id _, _) as qi :: qs' -> go qs' (qi :: vars, cons)
     | QI_aux (QI_const c, _) :: qs' -> go qs' (vars, c :: cons)
-    | [] -> (vars, cons)
-  in
+    | [] -> (vars, cons) in
   let vars, cons = go qs ([], []) in
   (rev vars, rev cons)
 
@@ -505,9 +504,18 @@ let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     | _ ->
        raise (Reporting_basic.err_unreachable l
                 "guarded pattern expression should have been rewritten before pretty-printing") in
+  let imp_pars =
+    let env = env_of_annot annot in
+    let quants, typ = Env.get_val_spec id env in
+    match quants with
+    | TypQ_aux (TypQ_tq qs, _) ->
+       let vars, _ = quant_and_constraints qs in
+       separate_map space (doc_quant_item (Some env) true) vars
+    | _ -> empty in
   group (prefix 3 1
-    (separate space [doc_id_fstar id; doc_pat_fstar true false pat; equals])
-    (doc_fun_body_fstar exp))
+           (separate space [doc_id_fstar id; imp_pars;
+                            doc_pat_fstar true false pat; equals])
+           (doc_fun_body_fstar exp))
 
 let doc_fundef_rhs_fstar (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
   separate_map (hardline ^^ string "and ") doc_funcl_fstar funcls
