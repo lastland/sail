@@ -254,9 +254,8 @@ let doc_typ_fstar, doc_typ_arg_fstar =
    match typ with
     (* Tuples *)
     | Typ_tup (typs) ->
-       let tpp = separate (string " * ")
-                   (List.map (doc_typ_neg false []) typs) in
-       add_parens parens_needed tpp
+       separate (space ^^ arrow ^^ space)
+         (List.map (doc_typ_neg false []) typs)
     (* Applications *)
     | Typ_app(Id_aux (Id "vector", _), [
             Typ_arg_aux (Typ_arg_nexp m, _);
@@ -434,15 +433,11 @@ let doc_kind_fstar (K_aux (K_kind ((BK_aux (k, _))::_), _)) =
 
 let doc_quant_item env imp (QI_aux (qi, _)) = match qi with
   | QI_id (KOpt_aux (KOpt_none kid, annot)) ->
-     begin match env with
-     | Some e ->
-        let doc_kid = if imp then string "#" ^^ doc_var_fstar kid
-                      else doc_var_fstar kid in
-        parens (doc_op colon doc_kid (string "int"))
-     | None -> doc_var_fstar kid
-     end
+     parens ((if imp then string "#" ^^ doc_var_fstar kid
+     else doc_var_fstar kid) ^^ string ": int")
   | QI_id (KOpt_aux (KOpt_kind (kind, kid), _)) ->
-     parens (doc_var_fstar kid ^^ string ":" ^^ doc_kind_fstar kind)
+     parens ((if imp then string "#" ^^ doc_var_fstar kid
+             else doc_var_fstar kid) ^^ string ":" ^^ doc_kind_fstar kind)
   | _ -> empty
 
 let quant_and_constraints qs =
@@ -494,6 +489,32 @@ let doc_typdef_fstar (TD_aux(td, annot)) =
   (* TODO: finish this *)
   | _ -> empty
 
+let args_of_typ l env typ =
+  let typs = match typ with
+    | Typ_aux (Typ_tup typs, _) -> typs
+    | typ -> [typ] in
+  let arg i typ =
+    let id = mk_id ("arg_" ^ string_of_int i) in
+    P_aux (P_id id, (l, mk_tannot env typ no_effect)),
+    E_aux (E_id id, (l, mk_tannot env typ no_effect)) in
+  List.split (List.mapi arg typs)
+
+let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
+  let env = env_of_annot annot in
+  let (Typ_aux (taux, _)) = typ_of_annot annot in
+  match paux, taux with
+  | P_tup [], _ ->
+     let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
+     [P_aux (P_lit (mk_lit L_unit), annot)]
+  | P_tup pats, _ -> pats
+  | P_wild, Typ_tup typs ->
+     let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
+     List.map wild typs
+  | P_typ (_, pat), _ -> untuple_args_pat pat
+  | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->
+     let pats, _ = args_of_typ l env (pat_typ_of pat) in pats
+  | _, _ -> [pat]
+
 let doc_fun_body_fstar exp = doc_exp_fstar exp
 
 let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
@@ -512,9 +533,10 @@ let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let vars, _ = quant_and_constraints qs in
        separate_map space (doc_quant_item (Some env) true) vars
     | _ -> empty in
+  let pats = untuple_args_pat pat in
+  let patspp = separate_map space (doc_pat_fstar true false) pats in
   group (prefix 3 1
-           (separate space [doc_id_fstar id; imp_pars;
-                            doc_pat_fstar true false pat; equals])
+           (separate space [doc_id_fstar id; imp_pars; patspp; equals])
            (doc_fun_body_fstar exp))
 
 let doc_fundef_rhs_fstar (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
