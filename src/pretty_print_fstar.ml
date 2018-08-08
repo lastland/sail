@@ -92,8 +92,8 @@ let doc_rec_fstar force_rec (Rec_aux(r,_)) = match r with
 let doc_lit_fstar (L_aux(lit,l)) =
   match lit with
   | L_unit  -> utf8string "()"
-  | L_zero  -> utf8string "0"
-  | L_one   -> utf8string "1"
+  | L_zero  -> utf8string "false"
+  | L_one   -> utf8string "true"
   | L_false -> utf8string "false"
   | L_true  -> utf8string "true"
   | L_num i -> utf8string (Big_int.to_string i)
@@ -161,8 +161,8 @@ let rec doc_nc_fstar (NC_aux (nc, _)) = match nc with
      doc_op (string "||") (doc_nc_fstar n1) (doc_nc_fstar n2)
   | NC_and (n1, n2) ->
      doc_op (string "&&") (doc_nc_fstar n1) (doc_nc_fstar n2)
-  | NC_true -> string "True"
-  | NC_false -> string "False"
+  | NC_true -> string "true"
+  | NC_false -> string "false"
   | NC_set (kid, l) -> string "FStar.Set.mem " ^^ doc_var_fstar kid ^^
                          parens (string "FStar.Set.as_set " ^^
                                    brackets (separate_map colon
@@ -254,7 +254,7 @@ let doc_typ_fstar, doc_typ_arg_fstar =
    match typ with
     (* Tuples *)
     | Typ_tup (typs) ->
-       separate (space ^^ arrow ^^ space)
+       separate (space ^^ arrow ^^ break 1)
          (List.map (doc_typ_neg false []) typs)
     (* Applications *)
     | Typ_app(Id_aux (Id "vector", _), [
@@ -311,6 +311,8 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp_fstar exp;
                      string "with" ^^ hardline ^^ doc_pexps_fstar pexps]
+  | E_app (Id_aux (Id x ,_), args) when x = "None" ->
+     string "None"
   | E_app (f, args) ->
      let call = match destruct_tannot annot with
        | Some (env, _, _) when Env.is_union_constructor f env ->
@@ -327,7 +329,36 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
        | Some (env, _, _) when is_ctor id env -> doc_id_fstar_ctor id
        | _ -> doc_id_fstar id
        end
-  | E_vector exps -> brackets (separate_map (string ";") doc_exp_fstar exps)
+  | E_vector exps ->
+     let dexp = brackets (separate_map (string ";") doc_exp_fstar exps) in
+     begin match destruct_tannot annot with
+     | Some (env, Typ_aux (typ, _), _) ->
+        begin match typ with
+        | Typ_app (Id_aux (Id "vector", _), [
+              Typ_arg_aux (Typ_arg_nexp m, _);
+              Typ_arg_aux (Typ_arg_order ord, _);
+              Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
+           begin match elem_typ with
+           | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
+              let outer_id = string "s__tmp" in
+              let inner_id = string "l__tmp" in
+              let dnexp = doc_nexp_fstar false m in
+              parens (doc_op equals (string "let " ^^ outer_id ^^ colon ^^
+                                       string "bv_t " ^^ parens dnexp)
+                        (parens (doc_op equals (string "let " ^^ inner_id) dexp ^^
+                                   string " in" ^^ hardline ^^
+                                   string "assert_norm" ^^
+                                   parens (string "List.Tot.length " ^^ inner_id ^^ equals ^^
+                                             doc_nexp_fstar false m) ^^
+                                   semi ^^ hardline ^^
+                                     string "list2bv " ^^ inner_id) ^^
+                           string " in" ^^ break 1 ^^ outer_id))
+           | _ -> dexp
+           end
+        | _ -> dexp
+        end
+     | None -> dexp
+     end
   | E_if (cond, e1, e2) ->
      string "if " ^^ parens (doc_exp_fstar cond) ^^
        string " then" ^^ break 1 ^^ parens (doc_exp_fstar e1) ^^ break 1 ^^
@@ -341,27 +372,7 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
        (parens (doc_exp_fstar e2)))
   | E_internal_return e ->
      let de = doc_exp_fstar e in
-     begin match e with
-     | E_aux (E_cast (Typ_aux (typ, _), e), _) ->
-        begin match typ with
-        | Typ_app(Id_aux (Id "vector", _), [
-              Typ_arg_aux (Typ_arg_nexp m, _);
-              Typ_arg_aux (Typ_arg_order ord, _);
-              Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
-           let asrt = string "assert_norm " ^^
-                        parens (string "List.Tot.length " ^^
-                                parens (doc_exp_fstar e) ^^ space ^^ equals ^^
-                                space ^^ doc_nexp_fstar false m) ^^ semi in
-           begin match elem_typ with
-             | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-                string "return " ^^ parens (string "list2bv " ^^ parens de)
-             | _ ->
-                asrt ^^ hardline ^^ string "return " ^^ de
-           end
-        | _ -> string "return " ^^ de
-        end
-     | _ -> string "return " ^^ de
-     end
+     string "return " ^^ parens de
   | E_internal_plet (pat, e1, e2) ->
      begin match fst (untyp_pat pat) with
      | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
@@ -453,7 +464,7 @@ let doc_typquant_fstar  (TypQ_aux(tq,_)) typ env = match tq with
   | TypQ_tq ((_ :: _) as qs) ->
      let vars, cons = quant_and_constraints qs in
      let typ' = doc_typ_fstar cons typ in
-     doc_op arrow (separate_map (space ^^ arrow ^^ space)
+     doc_op arrow (separate_map (space ^^ arrow ^^ break 1)
                      (doc_quant_item env true) vars) typ'
   | _ -> doc_typ_fstar [] typ
 
@@ -566,8 +577,6 @@ let doc_docstring_fstar (l, _) = match l with
 
 let doc_spec_fstar (VS_aux (valspec,annot)) =
   match valspec with
-  | VS_val_spec (_,_,_,is_cast) when is_cast = true ->
-     empty
   | VS_val_spec (typschm,id,ext,_) when ext "fstar" = None ->
      (* let (TypSchm_aux (TypSchm_ts (tq, typ), _)) = typschm in
      if contains_t_pp_var typ then empty else *)

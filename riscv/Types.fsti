@@ -18,6 +18,9 @@ let int_exact (m:int) : Type = n:int{n = m}
 
 let int_between (a:int) (b:int) : Type = n:int{a <= n && n <= b}
 
+val signed : #n:int -> bv_t n -> int_between (-pow2 (n - 1)) (pow2 (n - 1) - 1)
+val unsigned : #n:int -> bv_t n -> int_between 0 (pow2 (n - 1))
+
 let update_list (#a:Type)(l:list a)(n:nat{n < length l})(e:a) : list a =
   let s = seq_of_list l in
   seq_to_list (upd s n e)
@@ -45,3 +48,5 @@ let bvshl (#n:int) (a:bv_t n) (s:nat) : Tot (bv_t n) =
 let bvshr (#n:int) (a:bv_t n) (s:nat) : Tot (bv_t n) =
   if n <= 0 then a
   else B.bvshr a s
+
+assume type real

@@ -2539,7 +2539,9 @@ let rewrite_vector_literal_to_local_var defs =
     match e_aux with
     | E_vector lst as exp ->
        let id = fresh_id "l__" Parse_ast.Unknown in
-       E_aux (E_let (LB_aux (LB_val (P_aux (P_id id, annot), E_aux (exp, annot)), annot), E_aux (E_id id, annot)), annot)
+       E_aux (E_let (LB_aux (LB_val (P_aux (P_id id, annot),
+                                     E_aux (exp, annot)), annot),
+                     E_aux (E_id id, annot)), annot)
     | _ -> E_aux (e_aux, annot) in
   let vector_exp = {
       id_exp_alg with
@@ -4588,8 +4590,9 @@ let rewrite_defs_fstar = [
     ("fix_val_specs", rewrite_fix_val_specs);
     ("split_execute", rewrite_split_fun_constr_pats "execute");
     ("recheck_defs", recheck_defs);
-    ("rewrite vector literals to let", rewrite_vector_literal_to_local_var);
     ("exp_lift_assign", rewrite_defs_exp_lift_assign);
+    ("trivial_sizeof", rewrite_trivial_sizeof);
+    ("sizeof", rewrite_sizeof);
     ("fix_val_specs", rewrite_fix_val_specs);
     ("remove_blocks", rewrite_defs_remove_blocks);
     ("letbind_effects", rewrite_defs_letbind_effects);

@@ -65,10 +65,10 @@ val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, 
 
 
 val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb", fstar: "op_Equality"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lteq_atom = {coq: "Z.leb", _: "lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gteq_atom = {coq: "Z.geb", _: "gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val lt_atom = {coq: "Z.ltb", _: "lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
-val gt_atom = {coq: "Z.gtb", _: "gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lteq_atom = {coq: "Z.leb", fstar:"op_LessThanOrEqual", _:"lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gteq_atom = {coq: "Z.geb", fstar:"op_GreaterThanOrEqual", _:"gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val lt_atom = {coq: "Z.ltb", fstar:"op_LessThan", _:"lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val gt_atom = {coq: "Z.gtb", fstar:"op_GreaterThan", _:"gt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 val eq_int = {ocaml: "eq_int", lem: "eq", fstar: "op_Equality"} : (int, int) -> bool
 val eq_bit = {ocaml: "eq_bit", lem: "eq", interpreter: "eq_anything", c: "eq_bit", fstar: "op_Equality"} : (bit, bit) -> bool
@@ -178,9 +178,9 @@ function or_vec (xs, ys) = builtin_or_vec(xs, ys)
 
 overload operator | = {or_bool, or_vec}
 
-val unsigned = {ocaml: "uint", lem: "uint"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
+val unsigned = {ocaml: "uint", lem: "uint", fstar:"unsigned"} : forall 'n. bits('n) -> range(0, 2 ^ 'n - 1)
 
-val signed = {ocaml: "sint", lem: "sint"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
+val signed = {ocaml: "sint", lem: "sint", fstar:"signed"} : forall 'n. bits('n) -> range(- (2 ^ ('n - 1)), 2 ^ ('n - 1) - 1)
 
 val hex_slice = "hex_slice" : forall 'n 'm, 'n >= 'm. (string, atom('n), atom('m)) -> bits('n - 'm)
 
@@ -287,25 +287,25 @@ overload operator * = {mult_atom, mult_int, mult_real}
 
 val Sqrt = {ocaml: "sqrt_real", lem: "realSqrt"} : real -> real
 
-val gteq_int = {coq: "Z.geb", _: "gteq"} : (int, int) -> bool
+val gteq_int = {coq: "Z.geb", fstar:"op_GreaterThanOrEqual", _:"gteq"} : (int, int) -> bool
 
 val gteq_real = {ocaml: "gteq_real", lem: "gteq"} : (real, real) -> bool
 
 overload operator >= = {gteq_atom, gteq_int, gteq_real}
 
-val lteq_int = {coq: "Z.leb", _: "lteq"} : (int, int) -> bool
+val lteq_int = {coq: "Z.leb", fstar:"op_LessThanOrEqual", _:"lteq"} : (int, int) -> bool
 
 val lteq_real = {ocaml: "lteq_real", lem: "lteq"} : (real, real) -> bool
 
 overload operator <= = {lteq_atom, lteq_int, lteq_real}
 
-val gt_int = {coq: "Z.gtb", _: "gt"} : (int, int) -> bool
+val gt_int = {coq: "Z.gtb", fstar:"op_GreaterThan", _:"gt"} : (int, int) -> bool
 
 val gt_real = {ocaml: "gt_real", lem: "gt"} : (real, real) -> bool
 
 overload operator > = {gt_atom, gt_int, gt_real}
 
-val lt_int = {coq: "Z.ltb", _: "lt"} : (int, int) -> bool
+val lt_int = {coq: "Z.ltb", fstar:"op_LessThan", _:"lt"} : (int, int) -> bool
 
 val lt_real = {ocaml: "lt_real", lem: "lt"} : (real, real) -> bool
 
