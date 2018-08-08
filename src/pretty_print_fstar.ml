@@ -175,7 +175,7 @@ let doc_typ_fstar, doc_typ_arg_fstar =
   let use_hoare pre post = length pre > 0 || length post > 0 in
   let add_cons pre quant post tpp =
     if use_hoare pre post then
-      string "Pure " ^^ tpp ^^
+      string "Pure " ^^ parens tpp ^^
         break 1 ^^ parens (string "requires " ^^
                              (if length pre > 0 then
                                 doc_constraints_fstar pre
@@ -336,9 +336,9 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_assign (le, e) ->
      string "update_reg" ^^ space ^^ doc_lexp_fstar le ^^ space ^^ doc_exp_fstar e
   | E_let (LB_aux (LB_val (pat, e1), _), e2) ->
-     prefix 2 1 (string "let" ^^ space ^^ doc_pat_fstar false false pat ^^
+     parens (prefix 2 1 (string "let" ^^ space ^^ doc_pat_fstar false false pat ^^
                    space ^^ equals ^^ break 1 ^^ doc_exp_fstar e1 ^^ string " in")
-       (parens (doc_exp_fstar e2))
+       (parens (doc_exp_fstar e2)))
   | E_internal_return e ->
      let de = doc_exp_fstar e in
      begin match e with
@@ -517,6 +517,14 @@ let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
 
 let doc_fun_body_fstar exp = doc_exp_fstar exp
 
+let orig_quant_item (QI_aux (q, l) as qa) = match q with
+  | QI_id (KOpt_aux (k, l')) ->
+     let k' = match k with
+     | KOpt_none kid -> KOpt_none (orig_kid kid)
+     | KOpt_kind (kind, kid) -> KOpt_kind (kind, orig_kid kid) in
+     QI_aux (QI_id (KOpt_aux (k', l')), l)
+  | _ -> qa
+
 let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
   let typ = typ_of_annot annot in
   let pat,guard,exp,(l,_) = destruct_pexp pexp in
@@ -531,7 +539,8 @@ let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
     match quants with
     | TypQ_aux (TypQ_tq qs, _) ->
        let vars, _ = quant_and_constraints qs in
-       separate_map space (doc_quant_item (Some env) true) vars
+       let vars' = map orig_quant_item vars in
+       separate_map space (doc_quant_item (Some env) true) vars'
     | _ -> empty in
   let pats = untuple_args_pat pat in
   let patspp = separate_map space (doc_pat_fstar true false) pats in
