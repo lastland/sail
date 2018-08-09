@@ -21,6 +21,16 @@ let int_between (a:int) (b:int) : Type = n:int{a <= n && n <= b}
 val signed : #n:int -> bv_t n -> int_between (-pow2 (n - 1)) (pow2 (n - 1) - 1)
 val unsigned : #n:int -> bv_t n -> int_between 0 (pow2 (n - 1))
 
+val bv_subrange : #n:int -> bv_t n -> m:int -> o:int ->
+    Pure (bv_t (m - (o - 1)))
+         (requires o <= m && m <= n)
+         (ensures fun _ -> True)
+
+val bv_index : #n:int -> bv_t n -> m:int ->
+    Pure bool
+    (requires 0 <= m && m < n)
+    (ensures fun _ -> True)
+
 let update_list (#a:Type)(l:list a)(n:nat{n < length l})(e:a) : list a =
   let s = seq_of_list l in
   seq_to_list (upd s n e)

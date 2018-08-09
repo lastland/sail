@@ -106,10 +106,16 @@ let doc_lit_fstar (L_aux(lit,l)) =
 
 let doc_id_fstar_type = Pretty_print_sail.doc_id
 
+let doc_reg_fstar id =
+  string "r" ^^ string (get_id_string id)
+
 let doc_id_fstar (Id_aux (id, _)) =
   match id with
   | Id x -> string (modify_var_string_fstar x)
   | DeIid x -> string (translate_operator x)
+
+let doc_id_or_reg_fstar id env =
+  if Env.is_register id env then doc_reg_fstar id else doc_id_fstar id
 
 let doc_id_fstar_ctor (Id_aux (id, _)) =
   match id with
@@ -366,6 +372,12 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_cast (typ, e) -> doc_exp_fstar e
   | E_assign (le, e) ->
      string "update_reg" ^^ space ^^ doc_lexp_fstar le ^^ space ^^ doc_exp_fstar e
+  | E_assert (e1, e2) ->
+  (* This is a runtime assert. I am using the assume in F* as an
+     equivalent for now. *)
+     string "assume " ^^ parens (doc_exp_fstar e1)
+  | E_constraint nexp ->
+     doc_nc_fstar nexp
   | E_let (LB_aux (LB_val (pat, e1), _), e2) ->
      parens (prefix 2 1 (string "let" ^^ space ^^ doc_pat_fstar false false pat ^^
                    space ^^ equals ^^ break 1 ^^ doc_exp_fstar e1 ^^ string " in")
@@ -426,9 +438,13 @@ and doc_pat_fstar apat_needed cast_omitted (P_aux (p,(l,annot)) as pa) = match p
   | P_list pats -> brackets (separate_map semi (doc_pat_fstar false cast_omitted) pats) (*Never seen but easy in lem*)
   | P_cons (p,p') -> doc_op (string "::") (doc_pat_fstar true cast_omitted p) (doc_pat_fstar true cast_omitted p')
   | P_record (_,_) -> empty (* TODO *)
-and doc_lexp_fstar (LEXP_aux (le, a) as l) =
+and doc_lexp_fstar (LEXP_aux (le, (_, a)) as l) =
   match le with
-  | LEXP_id id -> doc_id_fstar id
+  | LEXP_id id ->
+     begin match destruct_tannot a with
+     | Some (env, _, _) -> doc_id_or_reg_fstar id env
+     | _ -> doc_id_fstar id
+     end
   | LEXP_deref e -> doc_exp_fstar e
   | _ -> Pretty_print_sail.doc_lexp l
 
@@ -464,7 +480,7 @@ let doc_typquant_fstar  (TypQ_aux(tq,_)) typ env = match tq with
   | TypQ_tq ((_ :: _) as qs) ->
      let vars, cons = quant_and_constraints qs in
      let typ' = doc_typ_fstar cons typ in
-     doc_op arrow (separate_map (space ^^ arrow ^^ break 1)
+     doc_op arrow (separate_map (space ^^ arrow ^^ space)
                      (doc_quant_item env true) vars) typ'
   | _ -> doc_typ_fstar [] typ
 
