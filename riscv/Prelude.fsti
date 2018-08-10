@@ -27,3 +27,6 @@ val write_ram : m:int -> n:int -> bv_t m -> bv_t m ->
 
 val read_ram : m:int -> n:int -> bv_t m -> bv_t m ->
                st (bv_t (op_Multiply 8 n))
+
+val shift_bits_right : #n:int -> #m:int -> bv_t n -> bv_t m -> bv_t n
+val shift_bits_left : #n:int -> #m:int -> bv_t n -> bv_t m -> bv_t n

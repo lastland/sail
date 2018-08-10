@@ -104,8 +104,6 @@ let doc_lit_fstar (L_aux(lit,l)) =
   | L_string s -> utf8string ("\"" ^ s ^ "\"")
   | L_real s -> utf8string s
 
-let doc_id_fstar_type = Pretty_print_sail.doc_id
-
 let doc_reg_fstar id =
   string "r" ^^ string (get_id_string id)
 
@@ -121,6 +119,8 @@ let doc_id_fstar_ctor (Id_aux (id, _)) =
   match id with
   | Id x -> string (String.capitalize (modify_var_string_fstar x))
   | DeIid x -> string (String.capitalize (translate_operator x))
+
+let doc_id_fstar_type = doc_id_fstar
 
 let doc_var_fstar (Kid_aux(Var x, l)) =
   doc_var (Kid_aux (Var (modify_var_string_fstar x), l))
@@ -197,13 +197,15 @@ let doc_typ_fstar, doc_typ_arg_fstar =
                                 doc_constraints_fstar post
                               else string "True"))
     else tpp in
-  let rec doc_typ_pos parens_needed pre quant post (Typ_aux (typ, l) as t) =
+  let add_st st tpp =
+    if st then (string "st " ^^ parens tpp) else tpp in
+  let rec doc_typ_pos parens_needed pre quant post st (Typ_aux (typ, l) as t) =
     let add_cons_r = add_cons pre quant in
     match typ with
     | Typ_tup typs ->
        let tpp = separate (space ^^ star ^^ space)
-                   (List.map (doc_typ_pos false [] [] []) typs) in
-       add_parens parens_needed (add_cons_r post tpp)
+                   (List.map (doc_typ_pos false [] [] [] false) typs) in
+       add_parens parens_needed (add_cons_r post (add_st st tpp))
     | Typ_app (Id_aux (Id "vector", _), [
             Typ_arg_aux (Typ_arg_nexp m, _);
             Typ_arg_aux (Typ_arg_order ord, _);
@@ -212,8 +214,8 @@ let doc_typ_fstar, doc_typ_arg_fstar =
          | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
             string "bv_t " ^^ doc_nexp_fstar true m
          | _ ->
-            string "list " ^^ doc_typ_pos true [] [] [] elem_typ in
-       add_parens parens_needed (add_cons_r post tpp)
+            string "list " ^^ doc_typ_pos true [] [] [] false elem_typ in
+       add_parens parens_needed (add_cons_r post (add_st st tpp))
     | Typ_app(Id_aux (Id "range", _), [
             Typ_arg_aux (Typ_arg_nexp n, _);
             Typ_arg_aux (Typ_arg_nexp m, _)]) ->
@@ -223,36 +225,38 @@ let doc_typ_fstar, doc_typ_arg_fstar =
                                     (Nexp_id (Id_aux (Id rtval, l)), l)), l) ::
                     NC_aux (NC_bounded_le
                               (Nexp_aux (Nexp_id (Id_aux (Id rtval, l)), l), m), l) :: post in
-          add_cons_r post (string "int")
+          add_cons_r post (add_st st (string "int"))
        else
           let tpp = separate space [string "int_between";
                                     doc_nexp_fstar true n;
                                     doc_nexp_fstar true m] in
-          add_parens parens_needed tpp
+          add_parens parens_needed (add_st st tpp)
     | Typ_app(Id_aux (Id "atom", _), [Typ_arg_aux(Typ_arg_nexp n,_)]) ->
        if use_hoare pre post then
           let post = NC_aux (NC_equal
                                (Nexp_aux (Nexp_id (Id_aux (Id rtval, l)), l), n), l) :: post in
-          add_cons_r post (string "int")
+          add_cons_r post (add_st st (string "int"))
        else
           let tpp = string "int_exact " ^^ doc_nexp_fstar true n in
-          add_parens parens_needed tpp
+          add_parens parens_needed (add_st st tpp)
     | Typ_app(id, xs) ->
        let tpp = doc_id_fstar id ^^ space ^^
                    separate_map space (doc_typ_arg true) xs in
-       add_parens parens_needed (add_cons_r post tpp)
+       add_parens parens_needed (add_cons_r post (add_st st tpp))
     | Typ_fn (ty1, ty2, eff) ->
        let tpp1 = doc_typ_neg true pre ty1 in
        let tpp2 = match eff with
          | Effect_aux (Effect_set (_::_), _) ->
-            string "st " ^^ doc_typ_pos true pre quant post ty2
-         | _ -> doc_typ_pos false pre quant post ty2 in
+            doc_typ_pos true pre quant post true ty2
+         | _ -> doc_typ_pos false pre quant post false ty2 in
        let tpp = doc_op arrow tpp1 tpp2 in
-       add_parens parens_needed tpp
-    | Typ_id (Id_aux (Id "bit", _)) -> add_cons_r post (string "bool")
-    | Typ_id id -> add_cons_r post (doc_id_fstar id)
+       add_parens parens_needed (add_st st tpp)
+    | Typ_id (Id_aux (Id "bit", _)) ->
+       add_cons_r post (add_st st (string "bool"))
+    | Typ_id id -> add_cons_r post (add_st st (doc_id_fstar id))
+    | Typ_var kid -> add_cons_r post (add_st st (doc_var_fstar kid))
     | Typ_exist (qs, ns, ty) ->
-       doc_typ_pos parens_needed pre (append qs quant) (ns::post) ty
+       doc_typ_pos parens_needed pre (append qs quant) (ns::post) false ty
     | _ ->
        let tpp = Pretty_print_sail.doc_typ t in
        add_parens parens_needed tpp
@@ -289,12 +293,13 @@ let doc_typ_fstar, doc_typ_arg_fstar =
        let tpp1 = doc_typ_neg true pre ty1 in
        let tpp2 = match eff with
          | Effect_aux (Effect_set (_::_), _) ->
-            string "st " ^^ doc_typ_pos true pre [] [] ty2
-         | _ -> doc_typ_pos false pre [] [] ty2 in
+            string "st " ^^ doc_typ_pos true pre [] [] true ty2
+         | _ -> doc_typ_pos false pre [] [] false ty2 in
        let tpp = doc_op arrow tpp1 tpp2 in
        add_parens parens_needed tpp
     | Typ_id (Id_aux (Id "bit", _)) -> string "bool"
     | Typ_id id -> doc_id_fstar id
+    | Typ_var kid -> doc_var_fstar kid
     | _ ->
        let tpp = Pretty_print_sail.doc_typ t in
        add_parens parens_needed tpp
@@ -302,10 +307,10 @@ let doc_typ_fstar, doc_typ_arg_fstar =
    if parens_needed then parens tpp else tpp
   and doc_typ_arg parens_needed (Typ_arg_aux (ta_aux, _)) =
     match ta_aux with
-    | Typ_arg_typ typ -> doc_typ_pos parens_needed [] [] [] typ
+    | Typ_arg_typ typ -> doc_typ_pos parens_needed [] [] [] false typ
     | Typ_arg_nexp nexp -> doc_nexp_fstar parens_needed nexp
     | Typ_arg_order _ -> empty in
-(fun cons -> doc_typ_pos false cons [] []), doc_typ_arg false
+(fun cons -> doc_typ_pos false cons [] [] false), doc_typ_arg false
 
 (* let effect_of (E_aux (exp, (l, annot)) as e) =
   match annot with
@@ -317,8 +322,6 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp_fstar exp;
                      string "with" ^^ hardline ^^ doc_pexps_fstar pexps]
-  | E_app (Id_aux (Id x ,_), args) when x = "None" ->
-     string "None"
   | E_app (f, args) ->
      let call = match destruct_tannot annot with
        | Some (env, _, _) when Env.is_union_constructor f env ->
@@ -404,10 +407,12 @@ and doc_pexp_fstar (Pat_aux (pat_aux, _)) =
                      string "if"; doc_exp_fstar wh;
                      string "then"; parens (doc_exp_fstar exp)]
 and doc_pexps_fstar pexps = separate_map hardline doc_pexp_fstar pexps
-and doc_pat_fstar apat_needed cast_omitted (P_aux (p,(l,annot)) as pa) = match p with
+and doc_pat_fstar apat_needed cast_omitted (P_aux (p,(l,annot)) as pa) =
+  match p with
+  | P_app(id, []) -> doc_id_fstar_ctor id
   | P_app(id, ((_ :: _) as pats)) ->
     let ppp = doc_unop (doc_id_fstar_ctor id)
-                (parens (separate_map comma (doc_pat_fstar true cast_omitted) pats)) in
+                (separate_map space (doc_pat_fstar true cast_omitted) pats) in
     if apat_needed then parens ppp else ppp
   | P_app(id, []) -> doc_id_fstar_ctor id
   | P_lit lit  -> doc_lit_fstar lit
@@ -467,6 +472,11 @@ let doc_quant_item env imp (QI_aux (qi, _)) = match qi with
              else doc_var_fstar kid) ^^ string ":" ^^ doc_kind_fstar kind)
   | _ -> empty
 
+let doc_quant_var env (QI_aux (qi, _)) = match qi with
+  | QI_id (KOpt_aux (KOpt_none kid, annot)) -> doc_var_fstar kid
+  | QI_id (KOpt_aux (KOpt_kind (kind, kid), _)) -> doc_var_fstar kid
+  | _ -> empty
+
 let quant_and_constraints qs =
   let rec go qs (vars, cons) =
     match qs with
@@ -488,6 +498,10 @@ let doc_typquant_items_fstar (TypQ_aux(tq,_)) env = match tq with
   | TypQ_tq qs -> separate_map space (doc_quant_item env false) qs
   | _ -> empty
 
+let doc_typquant_vars_fstar (TypQ_aux(tq,_)) env = match tq with
+  | TypQ_tq qs -> separate_map space (doc_quant_var env) qs
+  | _ -> empty
+
 let doc_typschm_fstar quants (TypSchm_aux(TypSchm_ts(tq,t),_)) env =
 (*  then
     let nexps_used = lem_nexps_of_typ t in
@@ -497,6 +511,13 @@ let doc_typschm_fstar quants (TypSchm_aux(TypSchm_ts(tq,t),_)) env =
     then pt
     else doc_typquant_fstar tq (Some nexps_to_include) (ptyc ^^ pt) *)
   if quants then doc_typquant_fstar tq t env else (doc_typ_fstar [] t)
+
+let doc_type_union_fstar (Tu_aux (Tu_ty_id (typ, id),_)) =
+  let tpp = match typ with
+  | Typ_aux (Typ_tup typs, _) ->
+     separate_map (space ^^ arrow ^^ space) (doc_typ_fstar []) typs
+  | _ -> doc_typ_fstar [] typ in
+  group (prefix 2 1 (string "| " ^^ doc_id_fstar_ctor id ^^ colon) tpp)
 
 let doc_typdef_fstar (TD_aux(td, annot)) =
   match td with
@@ -508,11 +529,19 @@ let doc_typdef_fstar (TD_aux(td, annot)) =
                         doc_typquant_items_fstar typq env])
        (doc_typschm_fstar false typschm env)
   | TD_enum (id,nm,lst,_)->
-     let env = opt_env_of_annot annot in
      doc_op equals
        (string "type" ^^ space ^^ doc_id_fstar_type id)
        (separate_map (break 1)
           (fun id -> string "| " ^^ doc_id_fstar_ctor id) lst)
+  | TD_variant (id,nm,typq,lst,_)->
+     let env = opt_env_of_annot annot in
+     let name = doc_id_fstar_type id  in
+     doc_op equals
+       (separate space [string "type"; name;
+                        space ^^ doc_typquant_items_fstar typq env])
+       (separate_map hardline (fun s ->
+            doc_type_union_fstar s ^^ space ^^ arrow ^^ space ^^ name ^^
+              space ^^ doc_typquant_vars_fstar typq env) lst)
   (* TODO: finish this *)
   | _ -> empty
 

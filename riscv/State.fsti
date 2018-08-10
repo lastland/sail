@@ -69,6 +69,15 @@ let read_reg (r:reg_t):
   return l'
 
 unfold
-let update_reg (r:reg_t) (n:regtyp r) (v:regval r) : st unit =
+let update_reg' (r:reg_t) (n:regtyp r) (v:regval r) : st unit =
   s <-- get;
   set ({s with regs = update_regmap r n v s.regs})
+
+unfold
+let update_reg (r:reg_t)
+  (l:list (regval r){length l = n_regtype r}) : st unit =
+  s <-- get;
+  set ({s with regs = fun r' -> if r = r' then
+          let f : regtyp r -> regval r =
+            fun n -> List.Tot.index l n in f
+        else s.regs r'})

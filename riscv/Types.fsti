@@ -59,4 +59,12 @@ let bvshr (#n:int) (a:bv_t n) (s:nat) : Tot (bv_t n) =
   if n <= 0 then a
   else B.bvshr a s
 
+let bvadd (#n:int) (a:bv_t n) (s:bv_t n) : Tot (bv_t n) =
+  if n <= 0 then a
+  else B.bvadd a s
+
+let bvsub (#n:int) (a:bv_t n) (s:bv_t n) : Tot (bv_t n) =
+    if n <= 0 then a
+    else B.bvsub a s
+
 assume type real
