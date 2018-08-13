@@ -64,7 +64,7 @@ function def_spc_backwards s = ()
 val def_spc_matches_prefix = "opt_spc_matches_prefix" : string -> option((unit, nat))
 
 
-val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb", fstar: "op_Equality"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val eq_atom = {ocaml: "eq_int", lem: "eq", c: "eq_int", coq: "Z.eqb", fstar: "eq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lteq_atom = {coq: "Z.leb", fstar:"op_LessThanOrEqual", _:"lteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val gteq_atom = {coq: "Z.geb", fstar:"op_GreaterThanOrEqual", _:"gteq"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 val lt_atom = {coq: "Z.ltb", fstar:"op_LessThan", _:"lt"} : forall 'n 'm. (atom('n), atom('m)) -> bool
@@ -138,7 +138,7 @@ val not_vec = "not_vec" : forall 'n. bits('n) -> bits('n)
 
 overload ~ = {not_bool, not_vec}
 
-val neq_atom = {lem: "neq", fstar: "op_disEquality"} : forall 'n 'm. (atom('n), atom('m)) -> bool
+val neq_atom = {lem: "neq", fstar: "neq_int"} : forall 'n 'm. (atom('n), atom('m)) -> bool
 
 function neq_atom (x, y) = not_bool(eq_atom(x, y))
 
@@ -274,8 +274,6 @@ overload operator - = {sub_range, sub_int, sub_vec, sub_vec_int, sub_real}
 
 overload negate = {negate_range, negate_int, negate_real}
 
-val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul"} : forall 'n 'm.
-  (atom('n), atom('m)) -> atom('n * 'm)
 val mult_range = {ocaml: "mult", lem: "integerMult", fstar: "op_Multiply"} : forall 'n 'm 'o 'p.
   (range('n, 'm), range('o, 'p)) -> range('n * 'o, 'm * 'p)
 
@@ -496,3 +494,7 @@ function shift_right_arith64 (v : bits(64), shift : bits(6)) -> bits(64) =
 function shift_right_arith32 (v : bits(32), shift : bits(5)) -> bits(32) =
     let v64 : bits(64) = EXTS(v) in
     (v64 >> shift)[31..0]
+    
+/* Copied from arith.sail. */
+val mult_atom = {ocaml: "mult", lem: "integerMult", c: "mult_int", coq: "Z.mul", fstar: "op_Multiply"} : forall 'n 'm.
+  (atom('n), atom('m)) -> atom('n * 'm)
