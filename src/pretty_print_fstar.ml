@@ -317,19 +317,45 @@ let doc_typ_fstar, doc_typ_arg_fstar =
   | Some (env, typ, eff) -> effect_of_annot (mk_tannot env typ eff)
   | None -> no_effect *)
 
+let is_existential (Typ_aux (typ, _)) =
+  match typ with
+  | Typ_fn (_, ty2, _) ->
+     begin match ty2 with
+     | Typ_aux (Typ_exist (_, _, _), _) -> true
+     | _ -> false
+     end
+  | Typ_exist (_, _, _) -> true
+  | _ -> false
+
+let rec returns_int (Typ_aux (typ, _)) =
+  match typ with
+  | Typ_fn (_, ty, _) -> returns_int ty
+  | Typ_exist (_, _, ty) -> returns_int ty
+  | Typ_app (Id_aux (Id "atom", _), _) -> true
+  | Typ_app (Id_aux (Id "range", _), _) -> true
+  | Typ_id (Id_aux (Id "Int", _)) -> true
+  | _ -> false
+
 let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   match exp with
   | E_case (exp, pexps) ->
      separate space [string "match"; doc_exp_fstar exp;
                      string "with" ^^ hardline ^^ doc_pexps_fstar pexps]
   | E_app (f, args) ->
-     let call = match destruct_tannot annot with
+     let call, is_ext = match destruct_tannot annot with
        | Some (env, _, _) when Env.is_union_constructor f env ->
-          doc_id_fstar_ctor f
+          let _, typ = Env.get_val_spec f env in
+          doc_id_fstar_ctor f, (is_existential typ && returns_int typ)
        | Some (env, _, _) when Env.is_extern f env "fstar" ->
-          string (Env.get_extern f env "fstar")
-       | _ -> doc_id_fstar f in
-     parens (hang 2 (flow (break 1) (call :: List.map doc_exp_fstar args)))
+          let _, typ = Env.get_val_spec f env in
+          string (Env.get_extern f env "fstar"), (is_existential typ && returns_int typ)
+       | Some (env, _, _) ->
+          let _, typ = Env.get_val_spec f env in
+          doc_id_fstar f, (is_existential typ && returns_int typ)
+       | _ -> doc_id_fstar f, false in
+     let tpp = parens (hang 2 (flow (break 1)
+                                 (call :: List.map doc_exp_fstar args))) in
+     if is_ext then parens (string "coerce_int " ^^ tpp) else tpp
   | E_id id ->
      if has_effect (effect_of e) BE_rreg then
        string "read_reg" ^^ space ^^ string "r" ^^ string (get_id_string id)
@@ -349,19 +375,16 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
               Typ_arg_aux (Typ_arg_typ elem_typ, _)]) ->
            begin match elem_typ with
            | Typ_aux (Typ_id (Id_aux (Id "bit",_)),_) ->
-              let outer_id = string "s__tmp" in
               let inner_id = string "l__tmp" in
               let dnexp = doc_nexp_fstar false m in
-              parens (doc_op equals (string "let " ^^ outer_id ^^ colon ^^
-                                       string "bv_t " ^^ parens dnexp)
-                        (parens (doc_op equals (string "let " ^^ inner_id) dexp ^^
-                                   string " in" ^^ hardline ^^
-                                   string "assert_norm" ^^
-                                   parens (string "List.Tot.length " ^^ inner_id ^^ equals ^^
-                                             doc_nexp_fstar false m) ^^
-                                   semi ^^ hardline ^^
-                                     string "list2bv " ^^ inner_id) ^^
-                           string " in" ^^ break 1 ^^ outer_id))
+              parens (parens (doc_op equals (string "let " ^^ inner_id) dexp ^^
+                         string " in" ^^ hardline ^^
+                           string "assert_norm" ^^
+                             parens (string "List.Tot.length " ^^ inner_id ^^
+                                       equals ^^ dnexp) ^^
+                               semi ^^ hardline ^^
+                                 string "list2bv " ^^ inner_id) ^^
+                        string " <: bv_t " ^^ dnexp)
            | _ -> dexp
            end
         | _ -> dexp
@@ -396,6 +419,9 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
         doc_op (string "<--") (doc_pat_fstar true true pat) (doc_exp_fstar e1) ^^
           semi ^^ hardline ^^ doc_exp_fstar e2
      end
+  | E_lit (L_aux (L_num n, _) as l) ->
+     let dl = doc_lit_fstar l in
+     parens (dl ^^ string " <: int_exact " ^^ dl)
   | _ -> Pretty_print_sail.doc_exp e
 and doc_pexp_fstar (Pat_aux (pat_aux, _)) =
   match pat_aux with

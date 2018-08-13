@@ -30,3 +30,5 @@ val read_ram : m:int -> n:int -> bv_t m -> bv_t m ->
 
 val shift_bits_right : #n:int -> #m:int -> bv_t n -> bv_t m -> bv_t n
 val shift_bits_left : #n:int -> #m:int -> bv_t n -> bv_t m -> bv_t n
+
+let coerce_int (n:int) : int_exact n = n
