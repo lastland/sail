@@ -419,6 +419,7 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
         doc_op (string "<--") (doc_pat_fstar true true pat) (doc_exp_fstar e1) ^^
           semi ^^ hardline ^^ doc_exp_fstar e2
      end
+  | E_exit e -> string "fail"
   | E_lit (L_aux (L_num n, _) as l) ->
      let dl = doc_lit_fstar l in
      parens (dl ^^ string " <: int_exact " ^^ dl)
@@ -584,18 +585,23 @@ let args_of_typ l env typ =
 let rec untuple_args_pat (P_aux (paux, ((l, _) as annot)) as pat) =
   let env = env_of_annot annot in
   let (Typ_aux (taux, _)) = typ_of_annot annot in
+  let identity = (fun body -> body) in
   match paux, taux with
   | P_tup [], _ ->
      let annot = (l, mk_tannot Env.empty unit_typ no_effect) in
-     [P_aux (P_lit (mk_lit L_unit), annot)]
-  | P_tup pats, _ -> pats
+     [P_aux (P_lit (mk_lit L_unit), annot)], identity
+  | P_tup pats, _ -> pats, identity
   | P_wild, Typ_tup typs ->
      let wild typ = P_aux (P_wild, (l, mk_tannot env typ no_effect)) in
-     List.map wild typs
+     List.map wild typs, identity
   | P_typ (_, pat), _ -> untuple_args_pat pat
   | P_as _, Typ_tup _ | P_id _, Typ_tup _ ->
-     let pats, _ = args_of_typ l env (pat_typ_of pat) in pats
-  | _, _ -> [pat]
+     let pats, exps = args_of_typ l env (pat_typ_of pat) in
+     let exp = E_aux (E_tuple exps, annot) in
+     let bindargs (E_aux (_, bannot) as body) =
+       E_aux (E_let (LB_aux (LB_val (pat, exp), annot), body), bannot) in
+     pats, bindargs
+  | _, _ -> [pat], identity
 
 let doc_fun_body_fstar exp = doc_exp_fstar exp
 
@@ -624,11 +630,11 @@ let doc_funcl_fstar (FCL_aux(FCL_Funcl(id, pexp), annot)) =
        let vars' = map orig_quant_item vars in
        separate_map space (doc_quant_item (Some env) true) vars'
     | _ -> empty in
-  let pats = untuple_args_pat pat in
+  let pats, bind = untuple_args_pat pat in
   let patspp = separate_map space (doc_pat_fstar true false) pats in
   group (prefix 3 1
            (separate space [doc_id_fstar id; imp_pars; patspp; equals])
-           (doc_fun_body_fstar exp))
+           (doc_fun_body_fstar (bind exp)))
 
 let doc_fundef_rhs_fstar (FD_aux(FD_function(r, typa, efa, funcls),fannot) as fd) =
   separate_map (hardline ^^ string "and ") doc_funcl_fstar funcls

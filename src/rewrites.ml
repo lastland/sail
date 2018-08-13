@@ -4369,7 +4369,7 @@ let rewrite_fun rewriters (FD_aux (FD_function (r,t,e,fcls),f_ann)) =
      let default = FCL_aux (FCL_Funcl (id,Pat_aux (Pat_exp (p,b),(l,empty_tannot))),fcl_ann) in
 
      FD_aux (FD_function (r,t,e,fcls'@[default]),f_ann)
-  
+
 
 let rewrite =
   let alg = { id_exp_alg with e_aux = rewrite_case } in
@@ -4594,6 +4594,9 @@ let rewrite_defs_fstar = [
     ("trivial_sizeof", rewrite_trivial_sizeof);
     ("sizeof", rewrite_sizeof);
     ("fix_val_specs", rewrite_fix_val_specs);
+    ("make_cases_exhaustive", MakeExhaustive.rewrite);
+    ("fix_val_specs", rewrite_fix_val_specs);
+    ("recheck_defs", recheck_defs);
     ("remove_blocks", rewrite_defs_remove_blocks);
     ("letbind_effects", rewrite_defs_letbind_effects);
     ("remove_e_assign", rewrite_defs_remove_e_assign);
