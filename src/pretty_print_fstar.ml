@@ -424,7 +424,7 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_exit e -> string "fail"
   | E_lit (L_aux (L_num n, _) as l) ->
      let dl = doc_lit_fstar l in
-     parens (dl ^^ string " <: int_exact " ^^ dl)
+     parens (string "coerce_int " ^^ dl)
   | _ -> Pretty_print_sail.doc_exp e
 and doc_pexp_fstar (Pat_aux (pat_aux, _)) =
   match pat_aux with
