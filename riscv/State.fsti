@@ -17,18 +17,8 @@ let state_eq (s0:state)(s1:state):Type0 =
 let st (a:Type) = state -> option a * state
 
 unfold
-let return (#a:Type) (x:a) :st a =
+let return (#a:Type) (x:a) : st a =
   fun s -> Some x, s
-
-unfold
-let bind (#a:Type) (#b:Type) (m:st a) (f:a -> st b) :st b =
-  fun s0 ->
-    let x, s1 = m s0 in
-    match x with
-    | Some x' ->
-      let y, s2 = f x' s1 in
-      y, {s2 with ok=s0.ok && s1.ok && s2.ok}
-    | None -> None, {s1 with ok=false}
 
 unfold
 let get : st state =
@@ -43,6 +33,22 @@ let fail (#a:Type) : st a =
   fun s -> None, {s with ok=false}
 
 unfold
+let failed (#a:Type) (m:st a)(s:state) : bool =
+  match m s with
+  | None, _ -> false
+  | _, _ -> true
+
+unfold
+let bind (#a:Type) (#b:Type) (m:st a) (f:a -> st b) : st b =
+  fun s0 ->
+    let x, s1 = m s0 in
+    match x with
+    | Some x' ->
+      let y, s2 = f x' s1 in
+      y, {s2 with ok=s0.ok && s1.ok && s2.ok}
+    | None -> None, {s1 with ok=false}
+
+unfold
 let check_imm (valid:bool) : st unit =
   if valid then
     return ()
@@ -50,7 +56,7 @@ let check_imm (valid:bool) : st unit =
     fail
 
 unfold
-let check (valid: state -> bool) : st unit =
+let check_state (valid: state -> bool) : st unit =
   s <-- get;
   if valid s then
     return ()

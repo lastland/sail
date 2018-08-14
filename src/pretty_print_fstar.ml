@@ -398,10 +398,6 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_cast (typ, e) -> doc_exp_fstar e
   | E_assign (le, e) ->
      string "update_reg" ^^ space ^^ doc_lexp_fstar le ^^ space ^^ doc_exp_fstar e
-  | E_assert (e1, e2) ->
-  (* This is a runtime assert. I am using the assume in F* as an
-     equivalent for now. *)
-     string "assume " ^^ parens (doc_exp_fstar e1)
   | E_constraint nexp ->
      doc_nc_fstar nexp
   | E_let (LB_aux (LB_val (pat, e1), _), e2) ->
@@ -414,7 +410,13 @@ let rec doc_exp_fstar (E_aux (exp, (l, annot)) as e) =
   | E_internal_plet (pat, e1, e2) ->
      begin match fst (untyp_pat pat) with
      | P_aux (P_wild,_) | P_aux (P_typ (_, P_aux (P_wild, _)), _) ->
-        doc_exp_fstar e1 ^^ semi ^^ hardline ^^ doc_exp_fstar e2
+        begin match e1 with
+        | E_aux (E_assert (ec, _), _) ->
+           string "if " ^^ parens (doc_exp_fstar ec) ^^
+             string " then" ^^ break 1 ^^ parens (doc_exp_fstar e2) ^^
+               break 1 ^^ string "else fail"
+        | _ -> doc_exp_fstar e1 ^^ semi ^^ hardline ^^ doc_exp_fstar e2
+        end
      | _ ->
         doc_op (string "<--") (doc_pat_fstar true true pat) (doc_exp_fstar e1) ^^
           semi ^^ hardline ^^ doc_exp_fstar e2
