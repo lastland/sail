@@ -333,16 +333,20 @@ let output_fstar filename regs defs =
   let state_filename = "State" in
   let prelude_filename = "Prelude" in
   let bv_module1 = "FStar.BV" in
-  let base_imports = [bv_module1; regs_filename; types_filename;
+  let base_imports = [bv_module1; types_filename;
                       state_filename; prelude_filename] in
+  let base_friends = [regs_filename] in
   let ((ro,_,_) as ext_ro) =
     open_output_with_check_unformatted (regs_filename ^ ".fst") in
+  let ((io,_, _) as ext_io) =
+    open_output_with_check_unformatted (filename ^ ".fsti") in
   let ((o,_, _) as ext_o) =
     open_output_with_check_unformatted (filename ^ ".fst") in
   (Pretty_print.pp_defs_fstar
-     (ro, (o, String.capitalize_ascii filename), base_imports)
+     (ro, (io, o, String.capitalize_ascii filename), base_imports, base_friends)
      regs defs generated_line);
   close_output_with_check ext_ro;
+  close_output_with_check ext_io;
   close_output_with_check ext_o
 
 let rec iterate (f : int -> unit) (n : int) : unit =

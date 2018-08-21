@@ -9,6 +9,8 @@ open Pretty_print_common
 
 let arrow = string "->"
 
+let comment s = string "(* " ^^ s ^^ string " *)"
+
 let is_ctor id env =
   Env.is_union_constructor id env || Env.is_enum id env
 
@@ -43,7 +45,7 @@ let translate_operator (x:string) =
 let get_id_string id =
   match id with
   | Id_aux ((Id x), _) -> x
-  | _ -> "" (* TODO: this case *)
+  | Id_aux ((DeIid x), _) -> x (* TODO: this case *)
 
 let rec pp_regnames o regs n =
   match regs with
@@ -668,22 +670,52 @@ let doc_spec_fstar (VS_aux (valspec,annot)) =
 let doc_def_fstar def =
   match def with
   | DEF_spec v_spec -> doc_spec_fstar v_spec
-  | DEF_type t_def -> group (doc_typdef_fstar t_def) ^/^ hardline
-  | DEF_fundef fdef -> group (doc_fundef_fstar fdef) ^/^ hardline
+  | DEF_type t_def -> group (doc_typdef_fstar t_def)
+  | DEF_fundef fdef -> group (doc_fundef_fstar fdef)
   | _ -> empty
 
-let pp_defs_fstar (regs_file, (defs_file, defs_module), base_imports)
+let pp_defs_fstar (regs_file, (vals_file, defs_file, defs_module), base_imports, base_friends)
       regs (Defs defs) top_line =
   pp_regs_fstar (regs_file, defs_module) regs;
   let is_typ_def = function
     | DEF_type _ -> true
-    | _ -> false
-  in
+    | _ -> false in
+  let is_val_def = function
+    | DEF_spec _ -> true
+    | _ -> false in
   let typdefs, defs = List.partition is_typ_def defs in
+  let valdefs, defs = List.partition is_val_def defs in
+  let valdefs' = List.fold_right (fun def acc ->
+                     match def with
+                     | DEF_fundef (FD_aux (FD_function (_, _, _, fcls), _)) ->
+                        List.fold_right (fun id acc' ->
+                            match List.find_opt
+                                    (fun v ->
+                                      match v with
+                                      | DEF_spec (VS_aux (VS_val_spec (_, id2, _, _), _)) when (get_id_string id2) = (get_id_string id) ->
+                                         true
+                                      | _ -> false) valdefs with
+                            | Some v ->
+                               v :: acc'
+                            | _ ->
+                               Reporting_basic.print_err false false Parse_ast.Unknown "Info" (get_id_string id);
+                               acc')
+                          (map (fun (FCL_aux (FCL_Funcl (id, _), _)) -> id) fcls) acc
+                     | _ -> acc) defs [] in
+  (print vals_file)
+    (concat
+       [(string "module ") ^^ (string defs_module); hardline; hardline;
+        separate hardline (List.map (fun s -> string "open " ^^ string s) base_imports);
+        hardline;
+        separate hardline (List.map (fun s -> string "open " ^^ string s) base_friends);
+        hardline; hardline;
+        separate (hardline ^^ hardline) (List.map doc_def_fstar typdefs); hardline; hardline;
+        separate (hardline ^^ hardline) (List.map doc_def_fstar valdefs')]);
   (print defs_file)
     (concat
        [(string "module ") ^^ (string defs_module); hardline; hardline;
         separate hardline (List.map (fun s -> string "open " ^^ string s) base_imports);
+        hardline;
+        separate hardline (List.map (fun s -> string "friend " ^^ string s) base_friends);
         hardline; hardline;
-        separate empty (List.map doc_def_fstar typdefs); hardline; hardline;
-        separate empty (List.map doc_def_fstar defs)])
+        separate (hardline ^^ hardline) (List.map doc_def_fstar defs)])
